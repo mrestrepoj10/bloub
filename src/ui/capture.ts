@@ -224,6 +224,9 @@ export interface ReglagesBot {
   expression: string
   /** objets portes, par identifiant */
   accessories: string[]
+  /** finition de ces objets, et sa couleur d'accent */
+  finish: string
+  accent: string
 }
 
 /**

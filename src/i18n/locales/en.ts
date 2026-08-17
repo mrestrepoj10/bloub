@@ -28,6 +28,9 @@ const en: typeof fr = {
     shape: 'Shape',
     expression: 'Expression',
     accessories: 'Accessory',
+    finish: 'Finish',
+    accent: 'Accent colour',
+    custom: 'Custom colour',
     color: 'Colour'
   },
 
@@ -146,6 +149,13 @@ const en: typeof fr = {
   accessories: {
     casque: 'Hard hat',
     gilet: 'Hi-vis vest'
+  },
+
+  finishes: {
+    chantier: 'Site',
+    fluo: 'Fluoro',
+    mono: 'Tone on tone',
+    accent: 'Accent'
   },
 
   colors: {

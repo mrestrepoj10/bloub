@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import BloubBot from '@/components/BloubBot.vue'
 import { DEFAULT_EXPRESSION } from '@/bot/expressions'
+import { DEFAULT_ACCENT, DEFAULT_FINISH } from '@/bot/finishes'
 import { DEFAULT_COLOR, DEFAULT_SHAPE } from '@/bot/skins'
 import type { StateId } from '@/bot/states'
 
@@ -23,6 +24,8 @@ withDefaults(
     color?: string
     expression?: string
     accessories?: string[]
+    finish?: string
+    accent?: string
     size?: number
   }>(),
   {
@@ -31,6 +34,8 @@ withDefaults(
     color: DEFAULT_COLOR,
     expression: DEFAULT_EXPRESSION,
     accessories: () => [],
+    finish: DEFAULT_FINISH,
+    accent: DEFAULT_ACCENT,
     size: 60
   }
 )
@@ -51,6 +56,8 @@ withDefaults(
       :color="color"
       :expression="expression"
       :accessories="accessories"
+      :finish="finish"
+      :accent="accent"
       :frozen-at="frozenAt"
     />
     <!-- 12 px : en dessous, une legende n'est plus lisible pour tout le monde -->

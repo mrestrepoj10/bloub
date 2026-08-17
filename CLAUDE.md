@@ -66,8 +66,17 @@ Details and the reasoning behind each are in [docs/](docs/):
   It declares closed contours in ball-radius units, the engine rasterises. Like the
   chosen shape, worn objects only show on `baseBody` states. Each declares a `reach`,
   and that's what widens the export frame (`demiCadre`) so a hat isn't sliced off the
-  top; a test checks the declaration against all eight shapes. Their colours are
-  chosen, not measured, like `--ink`.
+  top; a test checks the declaration against all eight shapes.
+- **An accessory declares ROLES, a finish paints them** (`finishes.ts`). Geometry
+  carries `corps` / `clair` / `sombre` / `bande`, never a hex, so a new colour scheme
+  costs no geometry and a new object costs no colour. The engine emits the role and
+  `BloubBot.vue` resolves it, the same boundary the body's ink already sits on. The
+  four finishes differ by where their colour COMES from: the object's own livery
+  (`chantier`), its neon version (`fluo`), the bot's own colour (`mono`), a picked one
+  (`accent`, the only `tinted: true` — which is why the swatches only show for it).
+  Two rules are load-bearing and tested: `mono` must SHIFT the bot's colour or the kit
+  turns invisible on the body it sits on, and a light shell flips its band dark or the
+  reflective stripes vanish. Colours here are chosen, not measured, like `--ink`.
 - **Two sources of shapes, not to be mixed.** `profiles.ts` is generated from the
   video and drives the animated states; `skins.ts` holds the customiser's shapes,
   built analytically. A user's shape only replaces the body on `baseBody` states

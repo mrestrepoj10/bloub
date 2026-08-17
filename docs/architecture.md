@@ -59,7 +59,21 @@ sizes itself from them. That is what keeps the hat on the head of a hexagon and 
 the tip of a droplet.
 
 Same division of labour as the states: an accessory declares closed contours in
-ball-radius units and only the engine rasterises them.
+ball-radius units and only the engine rasterises them. It doesn't carry colours
+either — each part declares the **role** it plays (`corps`, `clair`, `sombre`,
+`bande`) and a **finish** paints it (`finishes.ts`). That is what lets a colour
+scheme be added without touching a single contour, and an object without writing a
+single hex. The engine emits the role, `BloubBot.vue` resolves it, exactly where
+the body's ink is already resolved.
+
+The four finishes differ by where the colour comes from, not by taste: the
+object's own livery (`chantier`, the real material), its neon version (`fluo`),
+the bot's own colour (`mono`), or a picked one (`accent` — the only one that reads
+the swatches, hence `tinted`, hence a palette that only appears for it). Two of
+the rules are there to keep the object visible rather than to look nice, and both
+are tested: `mono` has to SHIFT the bot's colour — taken as-is, the kit would be
+exactly the colour of the body wearing it — and a shell lighter than 0.62 luma
+flips its reflective bands dark, or a cream vest comes out plain.
 
 They follow the same rule as the chosen shape — they only appear on `baseBody`
 states, and cross-fade with them — because everywhere else the silhouette *is* the

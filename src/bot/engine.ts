@@ -1,4 +1,4 @@
-import type { BotAccessory } from './accessories'
+import type { AccessoryId, AccessoryRole, BotAccessory } from './accessories'
 import { arcRender, type ArcRender, type DotRender } from './decor'
 import { blendExpression, type BotExpression } from './expressions'
 import { blinkScale, eyePoses, liveliness } from './face'
@@ -22,10 +22,18 @@ export interface RenderedEye {
   alpha: number
 }
 
-/** Une piece d'un objet porte, deja mise a l'echelle du viewBox. */
+/**
+ * Une piece d'un objet porte, deja mise a l'echelle du viewBox.
+ *
+ * Elle sort SANS couleur, comme le corps : le moteur ne connait que la
+ * geometrie, et c'est la finition qui peint (`finishes.ts`, applique par
+ * `BloubBot.vue` comme il applique deja l'encre). D'ou le couple objet + role,
+ * qui suffit a retrouver la teinte.
+ */
 export interface RenderedAccessory {
   d: string
-  fill: string
+  accessory: AccessoryId
+  role: AccessoryRole
   opacity: number
   /** true = a peindre DANS le masque du corps (cf. `AccessoryPart.clipped`) */
   clipped: boolean
@@ -422,7 +430,8 @@ export class BotEngine {
         for (const part of acc.parts(metrics)) {
           accessories.push({
             d: polyPath(part.pts, R),
-            fill: part.fill,
+            accessory: acc.id,
+            role: part.role,
             opacity,
             clipped: part.clipped === true
           })

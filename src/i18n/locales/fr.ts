@@ -45,6 +45,15 @@ export default {
     shape: 'Forme',
     expression: 'Expression',
     accessories: 'Accessoire',
+    finish: 'Finition',
+    /**
+     * Le nuancier ne parait qu'avec la finition « accent », qui est la seule a
+     * tirer sa teinte d'un choix : son titre nomme donc CETTE couleur-la, et
+     * non « la couleur des accessoires », qui laisserait croire que les trois
+     * autres finitions l'ecoutent aussi.
+     */
+    accent: "Couleur d'accent",
+    custom: 'Couleur libre',
     color: 'Couleur'
   },
 
@@ -175,6 +184,14 @@ export default {
   accessories: {
     casque: 'Casque',
     gilet: 'Gilet'
+  },
+
+  /** Comment les objets portes sont peints. */
+  finishes: {
+    chantier: 'Chantier',
+    fluo: 'Fluo',
+    mono: 'Ton sur ton',
+    accent: 'Accent'
   },
 
   colors: {

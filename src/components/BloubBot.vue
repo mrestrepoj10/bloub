@@ -16,7 +16,8 @@ import {
   SHAPE_BY_ID,
   mixHex
 } from '@/bot/skins'
-import { ACCESSORY_BY_ID, type BotAccessory } from '@/bot/accessories'
+import { ACCESSORIES, ACCESSORY_BY_ID, type BotAccessory } from '@/bot/accessories'
+import { DEFAULT_ACCENT, DEFAULT_FINISH, accessoryColors } from '@/bot/finishes'
 import { blockAt, defaultCycle, offsetOf, type Block } from '@/bot/cycles'
 import { STATE_BY_ID, type StateId } from '@/bot/states'
 
@@ -35,6 +36,10 @@ const props = withDefaults(
      * meme emplacement (cf. `accessories.ts`).
      */
     accessories?: string[]
+    /** identifiant de finition : comment les objets portes sont peints */
+    finish?: string
+    /** couleur d'accent, id de la palette ou hex libre de la pipette */
+    accent?: string
     /** couleur du fond, utilisee pour la brume de profondeur des particules */
     paper?: string
     /**
@@ -68,6 +73,8 @@ const props = withDefaults(
     color: DEFAULT_COLOR,
     expression: DEFAULT_EXPRESSION,
     accessories: () => [],
+    finish: DEFAULT_FINISH,
+    accent: DEFAULT_ACCENT,
     paper: '#f9f9f9',
     frozenAt: undefined,
     cycle: () => defaultCycle().blocks,
@@ -102,6 +109,20 @@ const accessories = computed(() =>
     .map((id) => ACCESSORY_BY_ID.get(id))
     .filter((a): a is BotAccessory => a !== undefined)
 )
+
+/**
+ * Teintes des objets portes, resolues ICI et non dans le moteur : c'est la meme
+ * frontiere que pour l'encre du corps — la geometrie d'un cote, la couleur de
+ * l'autre.
+ *
+ * Resolues pour TOUT le catalogue et pas seulement pour ce qui est porte : un
+ * objet qu'on vient de retirer continue d'etre dessine le temps de son fondu,
+ * alors qu'il a deja quitte la liste.
+ */
+const teintes = computed(() => {
+  const ctx = { finish: props.finish, accent: props.accent, ink: ink.value }
+  return new Map(ACCESSORIES.map((a) => [a.id, accessoryColors(a, ctx)]))
+})
 
 const engine = new BotEngine(R, state.value, shapeRadii.value, expression.value, accessories.value)
 const frame = shallowRef<BotFrame>(engine.sample(props.frozenAt ?? 0))
@@ -468,6 +489,11 @@ onBeforeUnmount(() => {
 const accessoiresPeints = computed(() => frame.value.accessories.filter((a) => a.clipped))
 const accessoiresPoses = computed(() => frame.value.accessories.filter((a) => !a.clipped))
 
+/** Couleur d'une piece : son role, peint par la finition. */
+function teinte(objet: BotFrame['accessories'][number]) {
+  return teintes.value.get(objet.accessory)?.[objet.role] ?? ink.value
+}
+
 /**
  * Un point est un simple disque, sauf quand l'etat fournit une forme (la
  * goutte du "!" penche) : le path est alors en unites de rayon de boule et
@@ -645,7 +671,7 @@ function dotAttrs(dot: BotFrame['dots'][number]) {
           v-for="(objet, i) in accessoiresPeints"
           :key="`av${i}`"
           :d="objet.d"
-          :fill="objet.fill"
+          :fill="teinte(objet)"
           :opacity="objet.opacity"
         />
       </g>
@@ -659,7 +685,7 @@ function dotAttrs(dot: BotFrame['dots'][number]) {
           v-for="(objet, i) in accessoiresPoses"
           :key="`ao${i}`"
           :d="objet.d"
-          :fill="objet.fill"
+          :fill="teinte(objet)"
           :opacity="objet.opacity"
         />
       </g>

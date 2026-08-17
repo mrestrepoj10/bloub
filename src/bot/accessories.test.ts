@@ -92,7 +92,7 @@ describe('geometrie sur toutes les formes', () => {
         expect(parts.length).toBeGreaterThan(0)
         for (const p of parts) {
           expect(p.pts.length).toBeGreaterThanOrEqual(3)
-          expect(p.fill).toMatch(/^#[0-9a-f]{6}$/)
+          expect(['corps', 'clair', 'sombre', 'bande']).toContain(p.role)
           for (const point of p.pts) expect(Number.isFinite(point.x + point.y)).toBe(true)
         }
       }

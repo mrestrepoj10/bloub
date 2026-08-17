@@ -11,7 +11,17 @@
 const PREFIXE = 'bloub:'
 
 /** Tout ce que l'application persiste. */
-const NOMS = ['cycles', 'cycle', 'forme', 'couleur', 'expression', 'accessoires', 'langue'] as const
+const NOMS = [
+  'cycles',
+  'cycle',
+  'forme',
+  'couleur',
+  'expression',
+  'accessoires',
+  'finition',
+  'accent',
+  'langue'
+] as const
 
 export type NomStocke = (typeof NOMS)[number]
 

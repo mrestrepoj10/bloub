@@ -16,9 +16,15 @@ import type { BodyMetrics, Point } from './shape'
  * sont declarees en unites de rayon de boule : seul le moteur connait l'echelle
  * du viewBox, donc c'est lui qui rasterise.
  *
- * Leurs couleurs sont CHOISIES et non mesurees, comme `--ink` : un gilet de
- * chantier est orange haute visibilite parce que c'est ce qui le rend
- * reconnaissable, et il le reste quelle que soit la couleur du bot.
+ * Ce fichier ne peint rien : chaque partie declare le ROLE qu'elle joue dans
+ * l'objet (la coque, son reflet, son ombre, une bande retroreflechissante) et
+ * c'est la finition qui lui donne sa teinte (`finishes.ts`). Sans ce partage,
+ * proposer un jeu de couleurs demandait de recopier la geometrie autant de fois
+ * qu'il y a de finitions.
+ *
+ * Chaque objet garde quand meme SES teintes de reference, celles du vrai
+ * materiel : `livery` (le jaune de securite, l'orange haute visibilite) et
+ * `fluo`, sa version poussee au neon. Choisies et non mesurees, comme `--ink`.
  */
 
 /** Enumeres pour que la couche i18n verifie leurs traductions a la compilation. */
@@ -30,10 +36,17 @@ export type AccessoryId = 'casque' | 'gilet'
  */
 export type AccessorySlot = 'tete' | 'torse'
 
+/**
+ * A quoi sert une partie dans l'objet. C'est la finition qui traduit ces roles
+ * en couleurs, donc un objet neuf n'a pas a savoir de quelles teintes il sera
+ * peint — juste ou tombent ses lumieres.
+ */
+export type AccessoryRole = 'corps' | 'clair' | 'sombre' | 'bande'
+
 export interface AccessoryPart {
   /** contour ferme, en unites de rayon de boule */
   pts: Point[]
-  fill: string
+  role: AccessoryRole
   /**
    * true = peint SUR le corps, donc taille par le masque de la silhouette. Le
    * masque etant celui qui perce les yeux, une partie decoupee ne peut pas non
@@ -54,6 +67,10 @@ export interface BotAccessory {
    * formes du personnalisateur par `accessories.test.ts`.
    */
   reach: number
+  /** Teinte de reference, celle du vrai materiel. */
+  livery: string
+  /** La meme, poussee au neon, pour la finition fluo. */
+  fluo: string
   /** Contours de l'objet pour la silhouette mesuree a cet instant. */
   parts(body: BodyMetrics): AccessoryPart[]
 }
@@ -90,11 +107,6 @@ function rect(x0: number, y0: number, x1: number, y1: number): Point[] {
 }
 
 /* ---------------------------------------------------------------- casque */
-
-/** Jaune de securite, sa nervure eclairee et la visiere dans son ombre. */
-const CASQUE = '#f2b21a'
-const CASQUE_NERVURE = '#ffd45e'
-const CASQUE_VISIERE = '#d18f0f'
 
 /**
  * Hauteurs exprimees en FRACTION du crane et non en valeur absolue : la capsule
@@ -152,27 +164,18 @@ function casque(body: BodyMetrics): AccessoryPart[] {
   const cx = corde ? (corde.x0 + corde.x1) / 2 : 0
   const hauteur = demi * CASQUE_COQUE
 
+  // La calotte, sa nervure eclairee, et la visiere qui reste dans son ombre.
   return [
-    { pts: dome(cx, assise, demi, hauteur), fill: CASQUE },
-    { pts: dome(cx, assise, demi * CASQUE_NERVURE_L, hauteur), fill: CASQUE_NERVURE },
+    { pts: dome(cx, assise, demi, hauteur), role: 'corps' },
+    { pts: dome(cx, assise, demi * CASQUE_NERVURE_L, hauteur), role: 'clair' },
     {
       pts: ellipse(cx, assise, demi + CASQUE_DEBORD * crane, CASQUE_EPAISSEUR * crane),
-      fill: CASQUE_VISIERE
+      role: 'sombre'
     }
   ]
 }
 
 /* ----------------------------------------------------------------- gilet */
-
-/**
- * Orange haute visibilite et bandes retroreflechissantes.
- *
- * Les bandes sont un gris argent et non un blanc : la ou elles touchent le bord
- * du corps, un blanc se confondait avec le fond d'une image exportee — la boule
- * paraissait ouverte par le bas.
- */
-const GILET = '#f4661d'
-const GILET_BANDE = '#d9e1e8'
 
 /**
  * Le gilet est entierement DECOUPE par le corps : ses contours debordent donc
@@ -229,17 +232,17 @@ function pan(cote: number, bas: number): AccessoryPart[] {
         { x: x(GILET_OUVERTURE), y: GILET_BAS },
         { x: x(GILET_DEHORS), y: GILET_BAS }
       ],
-      fill: GILET,
+      role: 'corps',
       clipped: true
     },
     {
       pts: rect(x(GILET_BRETELLE[0]), GILET_BRETELLE_Y, x(GILET_BRETELLE[1]), ceintureBas),
-      fill: GILET_BANDE,
+      role: 'bande',
       clipped: true
     },
     {
       pts: rect(x(GILET_OUVERTURE), ceintureHaut, x(GILET_DEHORS), ceintureBas),
-      fill: GILET_BANDE,
+      role: 'bande',
       clipped: true
     }
   ]
@@ -255,9 +258,10 @@ export const ACCESSORIES: BotAccessory[] = [
   // 1.30 : le pire cas est le squircle, dont le sommet plat porte la calotte la
   // plus large, donc la plus haute (1.25). Verifie sur les huit formes par un
   // test — c'est cette valeur qui elargit le cadre d'export.
-  { id: 'casque', slot: 'tete', reach: 1.3, parts: casque },
+  // jaune de securite, et sa version neon
+  { id: 'casque', slot: 'tete', reach: 1.3, livery: '#f2b21a', fluo: '#e8ff1f', parts: casque },
   // Rien ne depasse : tout est decoupe par le corps.
-  { id: 'gilet', slot: 'torse', reach: 0, parts: gilet }
+  { id: 'gilet', slot: 'torse', reach: 0, livery: '#f4661d', fluo: '#ff6a12', parts: gilet }
 ]
 
 // Map indexee par `string` : les appelants interrogent avec une valeur relue du

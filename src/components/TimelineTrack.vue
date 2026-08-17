@@ -28,6 +28,8 @@ const props = defineProps<{
   color: string
   expression: string
   accessories: string[]
+  finish: string
+  accent: string
 }>()
 
 const emit = defineEmits<{
@@ -366,6 +368,8 @@ function onRulerMove(e: PointerEvent) {
                   :color="color"
                   :expression="expression"
                   :accessories="accessories"
+                  :finish="finish"
+                  :accent="accent"
                   :paper="i === block ? '#ffffff' : '#f2f2f2'"
                   :frozen-at="POSES[b.state]"
                 />
@@ -422,6 +426,8 @@ function onRulerMove(e: PointerEvent) {
               :color="color"
               :expression="expression"
               :accessories="accessories"
+              :finish="finish"
+              :accent="accent"
               @pick="emit('add', $event)"
             />
           </li>
