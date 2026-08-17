@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { ACCESSORIES } from '@/bot/accessories'
 import { SHAPES } from '@/bot/skins'
 import {
   ACTIONS,
@@ -16,6 +17,7 @@ import {
   ACTION_BY_ID,
   ACTION_DEFAUT,
   DEMI_CADRE,
+  demiCadre,
   RAYON_MAX,
   nomFichier,
   sansCommentaires,
@@ -64,6 +66,39 @@ describe('cadre d export', () => {
   it('produit un viewBox carre centre sur la boule', () => {
     expect(viewBoxExport(125)).toBe('-125 -125 250 250')
     expect(viewBoxExport()).toBe(`${-DEMI_CADRE} ${-DEMI_CADRE} ${DEMI_CADRE * 2} ${DEMI_CADRE * 2}`)
+  })
+})
+
+describe('cadre d un bot equipe', () => {
+  /*
+   * Le pendant du test ci-dessus pour ce que le bot PORTE : le casque monte a
+   * 1,28 rayon quand la plus large des formes s'arrete a 1,15. Sur le cadre nu,
+   * il se ferait trancher au sommet sans que rien ne le signale.
+   */
+  it('s elargit pour ce qui depasse de la boule', () => {
+    for (const acc of ACCESSORIES) {
+      const demi = demiCadre([acc.id])
+      expect(acc.reach * RAYON_BOULE, `« ${acc.id} » depasse du cadre`).toBeLessThan(demi)
+    }
+    expect(demiCadre(['casque'])).toBeGreaterThan(DEMI_CADRE)
+  })
+
+  it('ne recule pas pour un objet entierement decoupe par le corps', () => {
+    // Le gilet ne deborde de rien : elargir le cadre ne ferait que rapetisser
+    // la boule dans l'image exportee.
+    expect(demiCadre(['gilet'])).toBe(DEMI_CADRE)
+    expect(demiCadre([])).toBe(DEMI_CADRE)
+  })
+
+  it('ignore un id inconnu', () => {
+    // La liste vient du localStorage, elle n'est pas sure.
+    expect(demiCadre(['chapeau'])).toBe(DEMI_CADRE)
+  })
+
+  it('reste dans le viewBox de l ecran', () => {
+    // L'export d'un CYCLE part du viewBox de l'ecran : s'il fallait l'elargir
+    // aussi, les anneaux des etats animes changeraient de taille avec un casque.
+    expect(demiCadre(ACCESSORIES.map((a) => a.id))).toBeLessThan(DEMI_ECRAN)
   })
 })
 

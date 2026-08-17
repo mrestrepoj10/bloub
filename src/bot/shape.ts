@@ -198,6 +198,61 @@ export function radiusAtAngle(radii: number[], angle: number): number {
 }
 
 /**
+ * Ce qu'il faut savoir d'une silhouette DEJA PROJETEE pour poser un objet
+ * dessus : ses extremes, et la largeur qu'elle occupe a une hauteur donnee.
+ *
+ * `radiusAtAngle` recale ce qui vit sur une sphere (les yeux, la pastille) ;
+ * ceci recale ce qui s'appuie sur le CONTOUR vu de face — le bord d'un casque
+ * se pose sur la largeur du crane a sa hauteur, pas sur un rayon.
+ */
+export interface BodyMetrics {
+  /** y du sommet (negatif : l'ecran a y vers le bas) */
+  top: number
+  bottom: number
+  left: number
+  right: number
+  /** Corde horizontale a la hauteur `y`, ou `null` si la forme n'y est pas. */
+  chordAt(y: number): { x0: number; x1: number } | null
+}
+
+export function bodyMetrics(pts: Point[]): BodyMetrics {
+  let top = Infinity
+  let bottom = -Infinity
+  let left = Infinity
+  let right = -Infinity
+  for (const p of pts) {
+    if (p.y < top) top = p.y
+    if (p.y > bottom) bottom = p.y
+    if (p.x < left) left = p.x
+    if (p.x > right) right = p.x
+  }
+  const n = pts.length
+  return {
+    top,
+    bottom,
+    left,
+    right,
+    // Balayage : on garde l'intersection la plus a gauche et la plus a droite,
+    // donc une forme a deux lobes (le nuage) donne bien sa largeur totale.
+    chordAt(y: number) {
+      let x0 = Infinity
+      let x1 = -Infinity
+      for (let i = 0; i < n; i++) {
+        const a = pts[i]!
+        const b = pts[(i + 1) % n]!
+        // Bornes dissymetriques : un sommet pile a la hauteur `y` ne compte
+        // qu'une fois, sinon les deux aretes qui s'y touchent le comptent deux.
+        if (a.y <= y === b.y <= y) continue
+        const x = a.x + ((y - a.y) / (b.y - a.y)) * (b.x - a.x)
+        if (x < x0) x0 = x
+        if (x > x1) x1 = x
+      }
+      return x0 <= x1 ? { x0, x1 } : null
+    }
+  }
+}
+
+/**
  * Superellipse : |x/sx|^n + |y/sy|^n = 1.
  * n = 2 donne une ellipse, n ~ 4 le squircle du personnalisateur.
  */

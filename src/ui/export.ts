@@ -4,6 +4,7 @@
  * vit dans `capture.ts`, elle, parce qu'elle a besoin d'un canvas.
  */
 
+import { ACCESSORY_BY_ID } from '@/bot/accessories'
 import { SHAPES } from '@/bot/skins'
 
 /**
@@ -41,7 +42,22 @@ export const RAYON_MAX = Math.max(...SHAPES.map((forme) => Math.max(...forme.rad
  * pareil a l'oeil », or les recadrer separement remettrait chacune a la meme
  * taille et casserait ce reglage.
  */
-export const DEMI_CADRE = Math.ceil(RAYON_BOULE * RAYON_MAX * MARGE)
+/**
+ * Le cadre s'ELARGIT quand le bot porte quelque chose qui depasse de lui. Le
+ * casque monte a 1.28 rayon la ou la plus large des formes s'arrete a 1.15 : sur
+ * le cadre nu, il se ferait trancher au sommet sans que rien ne le signale.
+ *
+ * Calcule d'apres la portee declaree dans le catalogue et non ecrit en dur, pour
+ * la meme raison que `RAYON_MAX` : un objet plus haut deplace le cadre tout seul.
+ * Et calcule d'apres les objets REELLEMENT portes — un gilet, entierement
+ * decoupe par le corps, ne fait donc pas reculer le cadre pour rien.
+ */
+export function demiCadre(accessoires: readonly string[] = []): number {
+  const portees = accessoires.map((id) => ACCESSORY_BY_ID.get(id)?.reach ?? 0)
+  return Math.ceil(RAYON_BOULE * Math.max(RAYON_MAX, ...portees) * MARGE)
+}
+
+export const DEMI_CADRE = demiCadre()
 
 /** viewBox du document exporte, centre sur la boule. */
 export function viewBoxExport(demi = DEMI_CADRE) {

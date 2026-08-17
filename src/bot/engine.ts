@@ -1,11 +1,14 @@
+import type { BotAccessory } from './accessories'
 import { arcRender, type ArcRender, type DotRender } from './decor'
 import { blendExpression, type BotExpression } from './expressions'
 import { blinkScale, eyePoses, liveliness } from './face'
 import { clamp, easings, lerp, r2 } from './math'
 import {
   blend,
+  bodyMetrics,
   capsulePath,
   closedPath,
+  polyPath,
   radiusAtAngle,
   toPoints,
   type Point,
@@ -19,10 +22,21 @@ export interface RenderedEye {
   alpha: number
 }
 
+/** Une piece d'un objet porte, deja mise a l'echelle du viewBox. */
+export interface RenderedAccessory {
+  d: string
+  fill: string
+  opacity: number
+  /** true = a peindre DANS le masque du corps (cf. `AccessoryPart.clipped`) */
+  clipped: boolean
+}
+
 export interface BotFrame {
   bodyPath: string
   bodyAlpha: number
   eyes: RenderedEye[]
+  /** objets portes, dans l'ordre de dessin */
+  accessories: RenderedAccessory[]
   dots: DotRender[]
   /** true = les points passent derriere le corps (particules de l'eclatement) */
   dotsBehind: boolean
@@ -140,6 +154,11 @@ export class BotEngine {
   private expr: BotExpression | null = null
   private exprPrev: BotExpression | null = null
   private exprAt = -10
+  private acc: BotAccessory[] = []
+  private accPrev: BotAccessory[] = []
+  private accAt = -10
+  /** points de la silhouette a l'echelle 1, pour poser les objets dessus */
+  private accPts: Point[] = []
   private look: Look = NO_LOOK
   private lookPrev: Look = NO_LOOK
   private lookAt = -10
@@ -161,12 +180,48 @@ export class BotEngine {
     scale = 100,
     initial: StateId = 'idle',
     shape: number[] | null = null,
-    expression: BotExpression | null = null
+    expression: BotExpression | null = null,
+    accessories: BotAccessory[] = []
   ) {
     this.scale = scale
     this.cur = initial
     this.shape = shape
     this.expr = expression
+    // Poses des le depart et non par un `setAccessories` apres coup : une
+    // vignette figee ne declenche aucun watcher, elle n'a que sa premiere image.
+    this.acc = accessories
+  }
+
+  /**
+   * Objets portes. Ils suivent la meme regle que la forme choisie — ils ne
+   * paraissent que sur les etats au repos (`baseBody`), parce qu'ailleurs la
+   * silhouette EST l'animation : un casque pose sur le « ! » qui traverse
+   * l'ecran ne veut rien dire.
+   *
+   * Le changement se fait en fondu croise et non d'un coup, comme la forme et
+   * l'expression : un objet qui apparait sec se lit comme un defaut d'affichage.
+   */
+  setAccessories(list: BotAccessory[], now = 0) {
+    if (list.length === this.acc.length && list.every((a, i) => a === this.acc[i])) return
+    this.accPrev = this.acc
+    this.acc = list
+    this.accAt = now
+  }
+
+  /**
+   * Objets effectifs a l'instant `now`, avec l'opacite de leur fondu. Un objet
+   * present des deux cotes du changement ne clignote pas : il reste a 1.
+   */
+  private accAtTime(now: number): Array<{ acc: BotAccessory; alpha: number }> {
+    const k = (now - this.accAt) / BotEngine.SHAPE_MORPH
+    const t = k >= 1 ? 1 : easings.easeOutQuint(clamp(k))
+    const out = this.acc.map((acc) => ({ acc, alpha: this.accPrev.includes(acc) ? 1 : t }))
+    if (t < 1) {
+      for (const acc of this.accPrev) {
+        if (!this.acc.includes(acc)) out.push({ acc, alpha: 1 - t })
+      }
+    }
+    return out
   }
 
   /**
@@ -300,6 +355,9 @@ export class BotEngine {
 
     // --- transition -------------------------------------------------------
     const since = now - this.tCur
+    // Les objets portes suivent `baseBody` : pleins sur un etat au repos,
+    // absents ailleurs, et ils traversent le fondu avec lui.
+    let worn = def.baseBody ? 1 : 0
     // L'etat precedent n'est jamais purge : `since < def.morph` suffit a
     // l'ignorer une fois le fondu passe, et l'oublier rendrait le moteur non
     // rejouable — relire une date d'avant la fin du fondu ne le retrouverait
@@ -312,7 +370,9 @@ export class BotEngine {
       // Le ratio est borne : relire une date ANTERIEURE au changement d'etat
       // donnerait un ratio negatif, que l'ease-out extrapole — la silhouette
       // part alors trente fois trop loin.
-      pose = blendPose(prevPose, pose, easings.easeOutQuint(clamp(since / def.morph)))
+      const k = easings.easeOutQuint(clamp(since / def.morph))
+      pose = blendPose(prevPose, pose, k)
+      worn = lerp(prevDef.baseBody ? 1 : 0, worn, k)
     }
 
     // --- vie au repos -----------------------------------------------------
@@ -348,6 +408,27 @@ export class BotEngine {
       sy: pose.sil.sy * life.breath
     }
     const bodyPath = closedPath(toPoints(sil, R, this.pts))
+
+    // --- objets portes ----------------------------------------------------
+    // Mesures prises sur la MEME silhouette que le corps (decalage et
+    // respiration compris), a l'echelle 1 : les objets vivent en unites de
+    // rayon de boule et bougent donc exactement avec elle.
+    const accessories: RenderedAccessory[] = []
+    if (worn > 0.01) {
+      const metrics = bodyMetrics(toPoints(sil, 1, this.accPts))
+      for (const { acc, alpha } of this.accAtTime(now)) {
+        const opacity = worn * alpha
+        if (opacity <= 0.01) continue
+        for (const part of acc.parts(metrics)) {
+          accessories.push({
+            d: polyPath(part.pts, R),
+            fill: part.fill,
+            opacity,
+            clipped: part.clipped === true
+          })
+        }
+      }
+    }
 
     // --- yeux -------------------------------------------------------------
     // Les yeux vivent sur une sphere de rayon 1 ; des que la silhouette n'est
@@ -401,6 +482,7 @@ export class BotEngine {
       bodyPath,
       bodyAlpha: pose.bodyAlpha,
       eyes,
+      accessories,
       dots,
       dotsBehind: pose.dotsBehind,
       // Les etats declarent des arcs en unites de rayon de boule ; le moteur

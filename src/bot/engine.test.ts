@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import { ACCESSORY_BY_ID } from './accessories'
 import { BotEngine } from './engine'
 import { radiusAtAngle } from './shape'
 import { EXPRESSION_BY_ID } from './expressions'
 import { REST_GAZE } from './face'
 import { SHAPE_BY_ID } from './skins'
-import { SEQUENCE, STATES, type StateId } from './states'
+import { SEQUENCE, STATES, STATE_BY_ID, type StateId } from './states'
 
 /** Points d'ancrage d'un path genere par closedPath (on ignore les controles). */
 function anchors(d: string): Array<[number, number]> {
@@ -182,6 +183,72 @@ describe('forme personnalisee', () => {
         expect(Math.hypot(ex, ey)).toBeLessThan(bord)
       }
     }
+  })
+})
+
+describe('objets portes', () => {
+  const casque = ACCESSORY_BY_ID.get('casque')!
+  const gilet = ACCESSORY_BY_ID.get('gilet')!
+
+  it('paraissent sur les etats au repos', () => {
+    const f = new BotEngine(100, 'idle', null, null, [casque, gilet]).sample(1)
+    expect(f.accessories.length).toBeGreaterThan(0)
+    // le gilet est peint DANS le corps, le casque se pose par-dessus
+    expect(f.accessories.some((a) => a.clipped)).toBe(true)
+    expect(f.accessories.some((a) => !a.clipped)).toBe(true)
+  })
+
+  it('disparaissent la ou la silhouette EST l animation', () => {
+    // Meme regle que la forme choisie : un casque sur le « ! » qui traverse
+    // l'ecran ne veut rien dire.
+    for (const id of ['exclaim', 'alert', 'sleep', 'egg', 'hexagon', 'burst'] as const) {
+      expect(new BotEngine(100, id, null, null, [casque]).sample(1).accessories).toEqual([])
+    }
+  })
+
+  it('ne changent rien au corps ni aux yeux', () => {
+    const nu = new BotEngine(100, 'idle').sample(1)
+    const habille = new BotEngine(100, 'idle', null, null, [casque, gilet]).sample(1)
+    expect(habille.bodyPath).toBe(nu.bodyPath)
+    expect(habille.eyes).toEqual(nu.eyes)
+  })
+
+  it('se fondent en entrant dans un etat au repos', () => {
+    const e = new BotEngine(100, 'exclaim', null, null, [casque])
+    e.setState('idle', 1)
+    const arrivee = STATE_BY_ID.get('idle')!.morph
+    const debut = e.sample(1.02).accessories[0]!.opacity
+    const milieu = e.sample(1 + arrivee / 2).accessories[0]!.opacity
+    expect(debut).toBeLessThan(milieu)
+    expect(milieu).toBeLessThan(1)
+    expect(e.sample(1 + arrivee + 0.05).accessories[0]!.opacity).toBe(1)
+  })
+
+  it('se croisent en opacite quand on en change', () => {
+    const e = new BotEngine(100, 'idle', null, null, [casque])
+    e.setAccessories([gilet], 1)
+    const pieces = e.sample(1 + BotEngine.SHAPE_MORPH / 2).accessories
+    // les deux sont la, aucun a plein
+    expect(pieces.some((a) => !a.clipped && a.opacity < 1)).toBe(true)
+    expect(pieces.some((a) => a.clipped && a.opacity < 1)).toBe(true)
+    // et a l'arrivee il ne reste que le gilet
+    expect(e.sample(2).accessories.every((a) => a.clipped && a.opacity === 1)).toBe(true)
+  })
+
+  it('reste une fonction pure du temps pendant un changement d objet', () => {
+    const e = new BotEngine(100, 'idle', null, null, [casque])
+    e.setAccessories([gilet], 1)
+    const milieu = e.sample(1.1).accessories
+    e.sample(3)
+    expect(e.sample(1.1).accessories).toEqual(milieu)
+  })
+
+  it('suivent la forme choisie', () => {
+    // Le casque s'appuie sur la corde du crane : il n'a pas la meme largeur sur
+    // un cercle et sur un triangle.
+    const rond = new BotEngine(100, 'idle', SHAPE_BY_ID.get('cercle')!.radii, null, [casque])
+    const pointu = new BotEngine(100, 'idle', SHAPE_BY_ID.get('triangle')!.radii, null, [casque])
+    expect(pointu.sample(1).accessories[0]!.d).not.toBe(rond.sample(1).accessories[0]!.d)
   })
 })
 

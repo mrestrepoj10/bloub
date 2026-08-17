@@ -14,7 +14,7 @@ import { createApp, h, nextTick, ref } from 'vue'
 import BloubBot from '@/components/BloubBot.vue'
 import type { Block } from '@/bot/cycles'
 import { gifAnime, gifIndexe, indexe, nouvellePalette, recense, svgAnime } from './anime'
-import { DEMI_ECRAN, sansCommentaires, viewBoxExport } from './export'
+import { DEMI_ECRAN, demiCadre, sansCommentaires, viewBoxExport } from './export'
 
 /**
  * Serialise le SVG affiche en un document autonome, recadre sur la boule.
@@ -222,7 +222,15 @@ export interface ReglagesBot {
   shape: string
   color: string
   expression: string
+  /** objets portes, par identifiant */
+  accessories: string[]
 }
+
+/**
+ * Cadre d'un export FIXE de l'avatar : il s'elargit si ce qu'il porte depasse de
+ * lui. Un casque coupe au sommet passerait pour un defaut du fichier livre.
+ */
+const cadre = (reglages: ReglagesBot) => viewBoxExport(demiCadre(reglages.accessories))
 
 /**
  * Rend la sequence image par image, sur une instance HORS ECRAN.
@@ -343,10 +351,14 @@ export async function ouvreCycle(
 }
 
 /**
- * Les matrices des yeux d'une image, lues sur le masque.
+ * Les matrices des yeux d'une image, lues sur les masques.
  *
- * Les yeux sont les seules formes du masque a porter un `transform` — le corps
+ * Les yeux sont les seules formes d'un masque a porter un `transform` — le corps
  * n'en a pas — donc l'ordre du document suffit a les identifier.
+ *
+ * TOUS les masques et pas seulement le premier : un objet pose par-dessus le
+ * corps (le casque) se voit repuncher les memes yeux dans un second masque, et
+ * `svgAnime` les anime aussi. Les deux listes doivent donc se correspondre.
  */
 function matricesDesYeux(svg: SVGSVGElement) {
   return [...svg.querySelectorAll('mask [transform]')].map((e) => e.getAttribute('transform')!)
@@ -367,7 +379,7 @@ export async function versSvgAnime(
 ): Promise<Blob> {
   let base = ''
   const matrices = await sequenceDuBot(reglages, taille, nombre, pas, (svg, i) => {
-    if (i === 0) base = svgAutonome(svg, taille)
+    if (i === 0) base = svgAutonome(svg, taille, cadre(reglages))
     return matricesDesYeux(svg)
   })
   const markup = svgAnime(base, matrices, +((nombre - 1) * pas).toFixed(3))
@@ -398,7 +410,7 @@ export async function versGifAnime(
     nombre,
     pas,
     async (svg) => {
-      const ctx = await dessine(svgAutonome(svg, taille), taille, canvas, fond)
+      const ctx = await dessine(svgAutonome(svg, taille, cadre(reglages)), taille, canvas, fond)
       return ctx.getImageData(0, 0, taille, taille).data
     },
     // les yeux prennent la teinte du fond pour s'y fondre exactement

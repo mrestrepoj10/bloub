@@ -26,7 +26,8 @@ only gate, so run `pnpm build` before you call something done.
 ## What's in it
 
 The rail on the left switches between three views. **Customise** offers 8 body
-shapes, 12 colours and 16 rest expressions, kept between visits. **Animations** is
+shapes, 16 rest expressions, 12 colours and 2 site accessories (hard hat, hi-vis
+vest), kept between visits. **Animations** is
 a small editor: arrange states into a timeline, set how long each is held, save the
 result. **Settings** holds the language (French, English or Chinese) and the
 credits.
@@ -92,8 +93,8 @@ index is what identifies where you are; `state` follows it as an output. Pass
 `frozenAt` and the component renders one exact frame with no animation loop, which
 is how the thumbnails and the state board are drawn.
 
-Props: `size`, `shape`, `color`, `expression`, `paper`, `frozenAt`, `cycle`,
-`follow`, `gaze`. Models: `block`, `state`, `playing`, `elapsed`. See
+Props: `size`, `shape`, `color`, `expression`, `accessories`, `paper`, `frozenAt`,
+`cycle`, `follow`, `gaze`. Models: `block`, `state`, `playing`, `elapsed`. See
 [BloubBot.vue](src/components/BloubBot.vue) for the details.
 
 ## License

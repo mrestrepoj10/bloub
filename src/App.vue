@@ -34,7 +34,9 @@ import {
   couleurDeFond,
   cycleImages,
   cyclePas,
+  demiCadre,
   nomFichier,
+  viewBoxExport,
   type ActionId,
   type EtatExport,
   type FondGif,
@@ -52,6 +54,7 @@ import {
   totalDuration,
   type Cycle
 } from '@/bot/cycles'
+import { normalizeAccessories } from '@/bot/accessories'
 import { DEFAULT_EXPRESSION, EXPRESSION_BY_ID } from '@/bot/expressions'
 import { COLOR_BY_ID, DEFAULT_COLOR, DEFAULT_SHAPE, SHAPE_BY_ID } from '@/bot/skins'
 import { POSES, SEQUENCE, STATES, type StateId } from '@/bot/states'
@@ -388,9 +391,20 @@ const expression = ref(
   stored(cle('expression'), DEFAULT_EXPRESSION, (v) => EXPRESSION_BY_ID.has(v))
 )
 
+/**
+ * Les objets portes sont une LISTE, donc une chaine separee par des virgules
+ * dans le stockage plutot qu'une valeur seule. Elle est relue par
+ * `normalizeAccessories`, qui jette les ids inconnus et ne garde qu'un objet par
+ * emplacement : le stockage n'est pas plus sur ici qu'ailleurs.
+ */
+const accessoires = ref<string[]>(
+  normalizeAccessories((localStorage.getItem(cle('accessoires')) ?? '').split(','))
+)
+
 watch(shape, (v) => localStorage.setItem(cle('forme'), v))
 watch(color, (v) => localStorage.setItem(cle('couleur'), v))
 watch(expression, (v) => localStorage.setItem(cle('expression'), v))
+watch(accessoires, (v) => localStorage.setItem(cle('accessoires'), v.join(',')))
 
 /**
  * Nom du produit, en capitales pour le grand mot du pied de page. PAS traduit —
@@ -525,7 +539,12 @@ async function exporteCycle() {
   const images = cycleImages(totalDuration(blocs), format)
   const pas = cyclePas(format)
   const taille = CYCLE_TAILLE[format]
-  const reglages = { shape: shape.value, color: color.value, expression: expression.value }
+  const reglages = {
+    shape: shape.value,
+    color: color.value,
+    expression: expression.value,
+    accessories: accessoires.value
+  }
   const suit = (fait: number, total: number) => (avancementCycle.value = fait / total)
 
   avancementCycle.value = 0
@@ -598,16 +617,26 @@ async function exporte(id: ActionId, confirme = false) {
     if (action.mode === 'anime') {
       // L'animation ne part PAS du SVG affiche : elle est rejouee depuis le debut
       // sur une instance hors ecran. Cf. `sequenceDuBot`.
-      const reglages = { shape: shape.value, color: color.value, expression: expression.value }
+      const reglages = {
+        shape: shape.value,
+        color: color.value,
+        expression: expression.value,
+        accessories: accessoires.value
+      }
       telecharge(await versSvgAnime(reglages, action.taille, ANIM_IMAGES, ANIM_PAS), nom())
       etatExport.value = 'exporte'
     } else if (action.mode === 'gif') {
-      const reglages = { shape: shape.value, color: color.value, expression: expression.value }
+      const reglages = {
+        shape: shape.value,
+        color: color.value,
+        expression: expression.value,
+        accessories: accessoires.value
+      }
       const fond = couleurDeFond(fondGif.value)
       telecharge(await versGifAnime(reglages, action.taille, GIF_IMAGES, GIF_PAS, fond), nom())
       etatExport.value = 'exporte'
     } else {
-      const markup = svgAutonome(svg, action.taille)
+      const markup = svgAutonome(svg, action.taille, viewBoxExport(demiCadre(accessoires.value)))
       if (action.mode === 'copieImage') {
         // Le blob part en PROMESSE et non attendu ici : cf. `copie` dans capture.ts.
         await copie(versPng(markup, action.taille))
@@ -668,6 +697,7 @@ watch(
           :shape="shape"
           :color="color"
           :expression="expression"
+          :accessories="accessoires"
           :frozen-at="POSES[s.id]"
         />
         <figcaption class="text-xs text-[var(--muted)]">{{ t(`states.${s.id}`) }}</figcaption>
@@ -776,6 +806,7 @@ watch(
             :shape="forme"
             :color="color"
             :expression="humeur ?? expression"
+            :accessories="accessoires"
             :follow="view === 'reglages'"
             :gaze="intro ? INTRO_GAZE : null"
           />
@@ -862,6 +893,7 @@ watch(
               :shape="shape"
               :color="color"
               :expression="expression"
+              :accessories="accessoires"
               :frozen-at="POSES[s.id]"
               @click="addBlock(s.id)"
             />
@@ -874,6 +906,7 @@ watch(
             v-model:shape="shape"
             v-model:color="color"
             v-model:expression="expression"
+            v-model:accessories="accessoires"
           />
         </template>
       </aside>
@@ -900,6 +933,7 @@ watch(
       :shape="shape"
       :color="color"
       :expression="expression"
+      :accessories="accessoires"
       @seek="onSeek"
       @preview="preview = true"
         @exporter="dialogueCycle = true"

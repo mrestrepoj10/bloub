@@ -16,6 +16,7 @@ import {
   SHAPE_BY_ID,
   mixHex
 } from '@/bot/skins'
+import { ACCESSORY_BY_ID, type BotAccessory } from '@/bot/accessories'
 import { blockAt, defaultCycle, offsetOf, type Block } from '@/bot/cycles'
 import { STATE_BY_ID, type StateId } from '@/bot/states'
 
@@ -28,6 +29,12 @@ const props = withDefaults(
     color?: string
     /** identifiant d'expression de repos du personnalisateur */
     expression?: string
+    /**
+     * Objets portes, par identifiant. Une liste et non un identifiant seul : on
+     * porte un casque ET un gilet, l'exclusion ne joue qu'a l'interieur d'un
+     * meme emplacement (cf. `accessories.ts`).
+     */
+    accessories?: string[]
     /** couleur du fond, utilisee pour la brume de profondeur des particules */
     paper?: string
     /**
@@ -60,6 +67,7 @@ const props = withDefaults(
     shape: DEFAULT_SHAPE,
     color: DEFAULT_COLOR,
     expression: DEFAULT_EXPRESSION,
+    accessories: () => [],
     paper: '#f9f9f9',
     frozenAt: undefined,
     cycle: () => defaultCycle().blocks,
@@ -87,11 +95,20 @@ const VB = 158
 const shapeRadii = computed(() => SHAPE_BY_ID.get(props.shape)?.radii ?? null)
 const ink = computed(() => COLOR_BY_ID.get(props.color)?.hex ?? '#0a0a0c')
 const expression = computed(() => EXPRESSION_BY_ID.get(props.expression) ?? null)
+// Les ids inconnus tombent : la liste vient du stockage ou d'une prop, donc
+// elle n'est pas validee.
+const accessories = computed(() =>
+  props.accessories
+    .map((id) => ACCESSORY_BY_ID.get(id))
+    .filter((a): a is BotAccessory => a !== undefined)
+)
 
-const engine = new BotEngine(R, state.value, shapeRadii.value, expression.value)
+const engine = new BotEngine(R, state.value, shapeRadii.value, expression.value, accessories.value)
 const frame = shallowRef<BotFrame>(engine.sample(props.frozenAt ?? 0))
 const uid = Math.random().toString(36).slice(2, 8)
 const maskId = `bot-mask-${uid}`
+const faceMaskId = `bot-face-${uid}`
+const bodyClipId = `bot-clip-${uid}`
 
 let raf = 0
 let nextAt = Infinity
@@ -394,6 +411,11 @@ watch(expression, (expr) => {
   redrawFrozen()
 })
 
+watch(accessories, (list) => {
+  engine.setAccessories(list, clock)
+  redrawFrozen()
+})
+
 /**
  * Deplacer `frozenAt` redessine. La prop ne servait qu'a poser une vignette une
  * fois pour toutes, donc personne ne la bougeait ; l'export anime, lui, avance
@@ -436,6 +458,15 @@ onBeforeUnmount(() => {
   cancelAnimationFrame(raf)
   detach()
 })
+
+/**
+ * Les objets portes se dessinent en deux couches, et c'est le masque qui les
+ * separe : ce qui est peint SUR le corps (le gilet) passe dedans, donc il est
+ * taille par la silhouette et ne peut pas boucher les yeux, qui en sont des
+ * trous ; ce qui deborde du corps (le casque) se pose par-dessus.
+ */
+const accessoiresPeints = computed(() => frame.value.accessories.filter((a) => a.clipped))
+const accessoiresPoses = computed(() => frame.value.accessories.filter((a) => !a.clipped))
 
 /**
  * Un point est un simple disque, sauf quand l'etat fournit une forme (la
@@ -500,6 +531,55 @@ function dotAttrs(dot: BotFrame['dots'][number]) {
         />
       </mask>
 
+      <!--
+        Meme decoupe, sans le corps : ce qui se pose PAR-DESSUS lui.
+
+        Le casque s'appuie sur le crane, donc il en couvre le haut — et selon la
+        forme choisie, le bord de sa visiere passe la ou vivent les yeux : ils
+        sont sur une sphere, pas sur le contour, donc rien ne garantit qu'il
+        reste de la place au-dessus (la capsule culmine a 0.62 rayon quand
+        l'oeil exterieur monte a 0.63). Les yeux etant des TROUS, un objet pose
+        par-dessus les bouche au lieu de passer derriere. On repunche donc les
+        memes trous dans lui : le casque s'arrete aux yeux quelle que soit la
+        forme, et sans avoir a le remonter jusqu'a le faire flotter.
+      -->
+      <mask
+        v-if="accessoiresPoses.length"
+        :id="faceMaskId"
+        maskUnits="userSpaceOnUse"
+        :x="-VB"
+        :y="-VB"
+        :width="VB * 2"
+        :height="VB * 2"
+      >
+        <rect :x="-VB" :y="-VB" :width="VB * 2" :height="VB * 2" fill="#fff" />
+        <!-- Les trous sont bornes au corps, comme ceux du masque du corps le
+             sont par construction : un oeil qui deborde de la silhouette n'y
+             est pas dessine, donc le repuncher en entier percerait le casque
+             sur du vide. -->
+        <g :clip-path="`url(#${bodyClipId})`">
+          <path
+            v-for="(eye, i) in frame.eyes"
+            :key="i"
+            :d="eye.d"
+            :transform="eye.matrix"
+            :opacity="eye.alpha"
+            fill="#000"
+          />
+          <circle
+            v-if="frame.notch"
+            :cx="frame.notch.x"
+            :cy="frame.notch.y"
+            :r="frame.notch.r"
+            fill="#000"
+          />
+        </g>
+      </mask>
+
+      <clipPath v-if="accessoiresPoses.length" :id="bodyClipId">
+        <path :d="frame.bodyPath" />
+      </clipPath>
+
       <linearGradient
         v-for="arc in frame.arcs"
         :id="`${uid}-${arc.id}`"
@@ -559,6 +639,29 @@ function dotAttrs(dot: BotFrame['dots'][number]) {
       <path :d="frame.bodyPath" :fill="props.paper" />
       <g :mask="`url(#${maskId})`">
         <rect :x="-VB" :y="-VB" :width="VB * 2" :height="VB * 2" :fill="ink" />
+        <!-- vetements : DANS le masque, donc decoupes par la silhouette et
+             incapables de recouvrir les yeux -->
+        <path
+          v-for="(objet, i) in accessoiresPeints"
+          :key="`av${i}`"
+          :d="objet.d"
+          :fill="objet.fill"
+          :opacity="objet.opacity"
+        />
+      </g>
+
+      <!-- objets qui debordent du corps : le casque se pose sur le crane, et
+           les yeux lui sont repunches (cf. le masque ci-dessus). Monte
+           seulement quand il y en a : sans objet, le masque n'existe pas et le
+           groupe garderait une reference pendante dans le SVG exporte. -->
+      <g v-if="accessoiresPoses.length" :mask="`url(#${faceMaskId})`">
+        <path
+          v-for="(objet, i) in accessoiresPoses"
+          :key="`ao${i}`"
+          :d="objet.d"
+          :fill="objet.fill"
+          :opacity="objet.opacity"
+        />
       </g>
     </g>
 

@@ -27,6 +27,7 @@ const en: typeof fr = {
     animations: 'Animation',
     shape: 'Shape',
     expression: 'Expression',
+    accessories: 'Accessory',
     color: 'Colour'
   },
 
@@ -140,6 +141,11 @@ const en: typeof fr = {
     hexagone: 'Hexagon',
     nuage: 'Cloud',
     goutte: 'Droplet'
+  },
+
+  accessories: {
+    casque: 'Hard hat',
+    gilet: 'Hi-vis vest'
   },
 
   colors: {

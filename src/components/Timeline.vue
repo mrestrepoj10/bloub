@@ -30,6 +30,7 @@ const props = defineProps<{
   shape: string
   color: string
   expression: string
+  accessories: string[]
 }>()
 
 /**
@@ -236,6 +237,7 @@ function onRemove() {
         :shape="shape"
         :color="color"
         :expression="expression"
+        :accessories="accessories"
         @update:blocks="(b: Block[]) => edit({ blocks: b })"
         @add="(s: StateId) => edit({ blocks: blocksWith(blocks, s) })"
         @seek="emit('seek', $event)"

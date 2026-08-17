@@ -22,6 +22,7 @@ withDefaults(
     shape?: string
     color?: string
     expression?: string
+    accessories?: string[]
     size?: number
   }>(),
   {
@@ -29,6 +30,7 @@ withDefaults(
     shape: DEFAULT_SHAPE,
     color: DEFAULT_COLOR,
     expression: DEFAULT_EXPRESSION,
+    accessories: () => [],
     size: 60
   }
 )
@@ -48,6 +50,7 @@ withDefaults(
       :shape="shape"
       :color="color"
       :expression="expression"
+      :accessories="accessories"
       :frozen-at="frozenAt"
     />
     <!-- 12 px : en dessous, une legende n'est plus lisible pour tout le monde -->

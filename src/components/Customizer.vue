@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import BotTile from '@/components/BotTile.vue'
+import { ACCESSORIES, toggleAccessory, type AccessoryId } from '@/bot/accessories'
 import { EXPRESSIONS } from '@/bot/expressions'
 import { COLORS, SHAPES } from '@/bot/skins'
 import { t } from '@/i18n'
@@ -7,12 +8,25 @@ import { t } from '@/i18n'
 const shape = defineModel<string>('shape', { required: true })
 const color = defineModel<string>('color', { required: true })
 const expression = defineModel<string>('expression', { required: true })
+const accessories = defineModel<string[]>('accessories', { required: true })
 
 /**
  * Les vignettes sont figees a la meme date que la pose de repos : elles montrent
  * la forme et le visage tels qu'ils apparaitront, pas un aplat abstrait.
  */
 const PREVIEW_AT = 1
+
+/**
+ * La grille des objets est la seule a BASCULER : on n'en porte pas forcement, et
+ * on en porte parfois deux. Recliquer sur une vignette retenue retire donc
+ * l'objet, la ou une forme ou une couleur ne peut que se remplacer.
+ *
+ * La vignette montre le bot avec CE seul objet, sans les autres : c'est ce que
+ * le clic pose, pas l'etat ou il mene.
+ */
+function basculer(id: AccessoryId) {
+  accessories.value = toggleAccessory(accessories.value, id)
+}
 </script>
 
 <template>
@@ -27,6 +41,7 @@ const PREVIEW_AT = 1
         :shape="s.id"
         :color="color"
         :expression="expression"
+        :accessories="accessories"
         :frozen-at="PREVIEW_AT"
         @click="shape = s.id"
       />
@@ -42,8 +57,25 @@ const PREVIEW_AT = 1
         :shape="shape"
         :color="color"
         :expression="e.id"
+        :accessories="accessories"
         :frozen-at="PREVIEW_AT"
         @click="expression = e.id"
+      />
+    </div>
+
+    <h2 class="mt-5 text-sm font-semibold">{{ t('panel.accessories') }}</h2>
+    <div class="mt-2 grid grid-cols-4 gap-1.5">
+      <BotTile
+        v-for="a in ACCESSORIES"
+        :key="a.id"
+        :label="t(`accessories.${a.id}`)"
+        :selected="accessories.includes(a.id)"
+        :shape="shape"
+        :color="color"
+        :expression="expression"
+        :accessories="[a.id]"
+        :frozen-at="PREVIEW_AT"
+        @click="basculer(a.id)"
       />
     </div>
 

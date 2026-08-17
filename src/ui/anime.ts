@@ -35,17 +35,28 @@ const ascii = (s: string) => Array.from(s, (c) => c.charCodeAt(0))
 export function svgAnime(base: string, matrices: string[][], duree: number): string {
   if (matrices.length < 2) throw new Error('il faut au moins deux images cles')
 
-  const mask = base.match(/<mask[\s\S]*?<\/mask>/)
-  if (!mask) throw new Error('masque introuvable')
+  // TOUS les masques, et pas seulement le premier : quand le bot porte un objet
+  // pose par-dessus lui (le casque), les memes yeux sont repunches dans un
+  // second masque pour qu'il ne les bouche pas. Ils y sont dans le meme ordre,
+  // et il faut les animer aussi — sinon le trou du casque resterait fige a la
+  // premiere image pendant que le regard, lui, bouge.
+  const masques = base.match(/<mask[\s\S]*?<\/mask>/g)
+  if (!masques) throw new Error('masque introuvable')
 
-  // Les yeux sont les seules formes du masque a porter un `transform` : le corps
-  // n'en a pas. On les numerote dans l'ordre du document.
+  // Les yeux sont les seules formes d'un masque a porter un `transform` : le
+  // corps n'en a pas. On les numerote dans l'ordre du document.
   let n = 0
-  const maskAnime = mask[0].replace(/transform="matrix\([^)]*\)"/g, () => `class="oeil${n++}"`)
+  let anime = base
+  for (const masque of masques) {
+    anime = anime.replace(
+      masque,
+      masque.replace(/transform="matrix\([^)]*\)"/g, () => `class="oeil${n++}"`)
+    )
+  }
   if (n === 0) throw new Error('aucun oeil a animer')
 
   const parImage = matrices[0]!.length
-  if (parImage !== n) throw new Error(`${n} yeux dans le masque, ${parImage} par image cle`)
+  if (parImage !== n) throw new Error(`${n} yeux dans les masques, ${parImage} par image cle`)
 
   const pas = 100 / (matrices.length - 1)
   const regles = Array.from({ length: n }, (_, oeil) => {
@@ -60,7 +71,8 @@ export function svgAnime(base: string, matrices: string[][], duree: number): str
     // `transform-box`/`transform-origin` ne sont pas decoratifs : sans eux, une
     // transformation CSS sur un element SVG tourne autour du centre de sa boite
     // au lieu de l'origine du repere, et l'oeil part a l'autre bout de la boule.
-    `.oeil0,.oeil1{transform-box:view-box;transform-origin:0 0;` +
+    `${Array.from({ length: n }, (_, i) => `.oeil${i}`).join(',')}{` +
+    `transform-box:view-box;transform-origin:0 0;` +
     // `alternate` donne une boucle SANS COUTURE : la derive du regard n'est pas
     // periodique (ses periodes sont premieres entre elles pour ne jamais se
     // repeter), donc une boucle simple montrerait un saut au raccord. Jouee puis
@@ -72,7 +84,7 @@ export function svgAnime(base: string, matrices: string[][], duree: number): str
     regles.join('') +
     '</style>'
 
-  return base.replace(mask[0], maskAnime).replace('</svg>', `${style}</svg>`)
+  return anime.replace('</svg>', `${style}</svg>`)
 }
 
 /* ------------------------------------------------------------------- gif */

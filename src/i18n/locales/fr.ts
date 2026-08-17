@@ -44,6 +44,7 @@ export default {
     animations: 'Animation',
     shape: 'Forme',
     expression: 'Expression',
+    accessories: 'Accessoire',
     color: 'Couleur'
   },
 
@@ -165,6 +166,15 @@ export default {
     hexagone: 'Hexagone',
     nuage: 'Nuage',
     goutte: 'Goutte'
+  },
+
+  /**
+   * Les objets portes. Nommes court : la vignette fait 60 px et son etiquette
+   * passe a la ligne. Le chantier est dit par le dessin, pas par le libelle.
+   */
+  accessories: {
+    casque: 'Casque',
+    gilet: 'Gilet'
   },
 
   colors: {

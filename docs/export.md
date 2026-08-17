@@ -76,6 +76,13 @@ cropping each one separately would put them all back at the same size and break 
 tuning. A test checks the frame contains **every** shape, so adding a wider one moves
 the frame on its own instead of getting clipped.
 
+It does widen for what the bot **wears**, though (`demiCadre`): the hard hat reaches
+1.30 ball radii where the widest shape stops at 1.15, so on the bare frame it would be
+sliced off at the top with nothing to signal it. The widening is driven by the `reach`
+each accessory declares and by the ones actually worn — the vest is entirely clipped by
+the body, so it never pushes the frame back for nothing. A cycle export is unaffected: it
+already runs on the screen's ±158, which contains the hat too.
+
 ## The animation is an SVG, and that is what makes it smooth
 
 A flipbook format (WebP, GIF, APNG) is capped by its frame count. The blink lasts

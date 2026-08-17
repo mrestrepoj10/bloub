@@ -48,6 +48,26 @@ picks only replaces the body on states flagged `baseBody`: `idle`, `wink`,
 `wide`, `notify` and `swirl`. Everywhere else the silhouette *is* the animation
 and must not be overwritten.
 
+## Worn objects are a third source of shapes
+
+`accessories.ts` holds what the bot *wears* — the hard hat, the hi-vis vest. It is
+neither `profiles.ts` (measured off the video) nor `skins.ts` (the customiser's
+bodies): those are bodies, these are objects laid **on** a body, so an accessory
+never knows which shape was chosen. It is handed the silhouette's measurements at
+instant *t* (`BodyMetrics`: top, bottom, and the horizontal chord at a height) and
+sizes itself from them. That is what keeps the hat on the head of a hexagon and off
+the tip of a droplet.
+
+Same division of labour as the states: an accessory declares closed contours in
+ball-radius units and only the engine rasterises them.
+
+They follow the same rule as the chosen shape — they only appear on `baseBody`
+states, and cross-fade with them — because everywhere else the silhouette *is* the
+animation: a hard hat riding the "!" across the screen means nothing.
+
+Their colours are **chosen**, not measured, like `--ink`: a site vest is hi-vis
+orange because that is what makes it readable as one, whatever colour the bot is.
+
 ## The eyes are holes in a `<mask>`
 
 Not white shapes laid on top. That is what makes them clip themselves against the
@@ -58,6 +78,14 @@ Because a hole shows whatever is drawn behind it, and the back half of the rings
 and the burst particles *are* drawn behind the body to be occluded by it, the body
 is backed by an opaque path in the page's `paper` colour. Without it, a ring
 passing behind the ball reappears inside the eyes.
+
+The mask is also what dresses the bot: the vest is drawn **inside** it, so the
+silhouette cuts it to shape and it cannot cover the eyes, whatever body it is worn
+on. What sticks out of the body can't use that mask — the hat has to be painted over
+the ball — so the same eye holes are punched a second time, into a mask of their own
+(clipped to the body, or the hole would open onto nothing outside the silhouette).
+Without it the brim would plug an eye on the flatter shapes, where the eyes ride
+higher than the top of the skull.
 
 ## Anything sitting "on" the body must follow its real radius
 

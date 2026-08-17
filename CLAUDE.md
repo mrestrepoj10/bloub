@@ -48,7 +48,10 @@ Details and the reasoning behind each are in [docs/](docs/):
   what makes morphing a linear interpolation of radii. A new shape must go through
   a radial profile, or `profileFromPolygon`.
 - **The eyes are holes in a `<mask>`**, not white shapes on top. That's what makes
-  them clip against the silhouette on their own.
+  them clip against the silhouette on their own. It's also what dresses the bot: the
+  vest is drawn *inside* the mask, so it can't cover them. Anything painted *over* the
+  body (the hard hat) gets the same holes punched a second time, into its own mask —
+  otherwise the brim plugs an eye on the flatter shapes.
 - **Anything sitting "on" the body must follow its real radius**: `radiusAtAngle`
   (defined in `shape.ts`, applied by `engine.ts`) for the eyes and the notification
   pastille. A new element anchored to the outline needs the same treatment.
@@ -57,6 +60,14 @@ Details and the reasoning behind each are in [docs/](docs/):
 - **Transitions are exponential ease-outs and the body never overshoots.** The one
   spring is the notification pop (`NOTIF_POP = 1.14`). There is deliberately no
   spring engine. A new bouncing effect belongs in the state that needs it.
+- **A third source of shapes: what the bot WEARS** (`accessories.ts`). Not bodies but
+  objects laid on one, so an accessory never knows the chosen shape: it gets the
+  silhouette's measurements at instant t (`BodyMetrics`) and sizes itself from them.
+  It declares closed contours in ball-radius units, the engine rasterises. Like the
+  chosen shape, worn objects only show on `baseBody` states. Each declares a `reach`,
+  and that's what widens the export frame (`demiCadre`) so a hat isn't sliced off the
+  top; a test checks the declaration against all eight shapes. Their colours are
+  chosen, not measured, like `--ink`.
 - **Two sources of shapes, not to be mixed.** `profiles.ts` is generated from the
   video and drives the animated states; `skins.ts` holds the customiser's shapes,
   built analytically. A user's shape only replaces the body on `baseBody` states

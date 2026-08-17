@@ -32,6 +32,7 @@ const zh: typeof fr = {
     animations: '动画',
     shape: '形状',
     expression: '表情',
+    accessories: '配件',
     color: '颜色'
   },
 
@@ -143,6 +144,11 @@ const zh: typeof fr = {
     hexagone: '六边形',
     nuage: '云朵',
     goutte: '水滴'
+  },
+
+  accessories: {
+    casque: '安全帽',
+    gilet: '反光背心'
   },
 
   colors: {
