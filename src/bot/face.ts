@@ -85,6 +85,31 @@ function headBasis(gaze: HeadGaze): { f: Vec3; right: Vec3; down: Vec3 } {
 const COIFFE = 50
 
 /**
+ * Inclinaison de l'AXE de la tete a l'ecran, en degres : 0 = tete droite,
+ * negatif = elle penche vers la gauche.
+ *
+ * A ne pas confondre avec `HeadGaze.roll`, qui est le roulis DANS le repere de
+ * la tete : une tete tournee et relevee penche a l'ecran meme a roulis nul, et
+ * c'est ce que voit le spectateur. Au repos, l'axe penche de -26deg — d'ou un
+ * casque pose bien droit qui a l'air de flotter sur une tete inclinee.
+ */
+export function headLean(gaze: HeadGaze): number {
+  const { down } = headBasis(gaze)
+  // l'axe « haut de la tete » est l'oppose de `down`
+  return (Math.atan2(-down[0]!, down[1]!) * 180) / Math.PI
+}
+
+/**
+ * Marge laissee autour d'un oeil par ce qui passe DERRIERE lui, en unites de
+ * rayon de boule.
+ *
+ * Meme idee que l'encoche de la pastille de notification : un vetement qui
+ * vient lecher un oeil se lit comme une tache posee dessus, alors qu'un liseré
+ * de corps autour de l'oeil le remet clairement au premier plan.
+ */
+export const EYE_MARGIN = 0.055
+
+/**
  * Point de la tete ou se pose ce qu'on porte dessus, projete a l'ecran (x, y)
  * avec sa profondeur (z).
  *

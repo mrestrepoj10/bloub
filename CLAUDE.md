@@ -73,8 +73,16 @@ Details and the reasoning behind each are in [docs/](docs/):
   the sphere's pole on purpose: the pole's projection comes back *down* when the head
   tips back, so a hat pinned to it would sink as the bot looks up. It's taken 50° off
   the pole toward the face. The follow is damped and clamped per object; the hat's
-  seat is re-measured at its new height (so it stays chaired on the skull) and pivots
-  around that seat. The vest follows the SAME way and less far, which is the one
+  seat is re-measured at its new height so it stays chaired on the skull.
+- **The tilt is the one measure that is ABSOLUTE, not a gap** (`HeadTilt.lean`): what
+  sits on a head is perpendicular to that head's axis, and at rest the axis already
+  leans -26° on screen — a head turned and raised looks tilted at zero roll. As a gap,
+  the hat came out level on a visibly tilted head and read as floating. It pivots
+  around the BALL'S CENTRE, not its own seat: around the seat it rocks in place, one
+  edge digging in while the other lifts and shows the crown; around the centre it
+  slides along the sphere at constant radius, so it stays chaired and `reach` is
+  untouched. What hangs on the body uses the gap instead (`roll`) — a garment follows
+  gravity, it doesn't go askew because the head turned. The vest follows the SAME way and less far, which is the one
   knowing departure from the sphere: built to counter-move (correct for a decal), the
   states that look down pushed it up over the face, eyes in the middle of the orange.
   Its clamp is asymmetric because the obstacle is — nothing below, the eyes above.

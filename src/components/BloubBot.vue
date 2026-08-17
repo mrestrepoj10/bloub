@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, triggerRef, watch } from 'vue'
 import { NOTIF_BLUE } from '@/bot/decor'
+import { EYE_MARGIN } from '@/bot/face'
 import { BotEngine, type BotFrame } from '@/bot/engine'
 import { clamp, easings } from '@/bot/math'
 import { t } from '@/i18n'
@@ -130,6 +131,14 @@ const uid = Math.random().toString(36).slice(2, 8)
 const maskId = `bot-mask-${uid}`
 const faceMaskId = `bot-face-${uid}`
 const bodyClipId = `bot-clip-${uid}`
+const garmentMaskId = `bot-vetement-${uid}`
+
+/**
+ * Epaisseur du liseré de corps laisse autour d'un oeil par ce qui passe
+ * derriere lui. En unites de viewBox, et pose en `stroke-width` sur la forme de
+ * l'oeil : la moitie deborde de chaque cote, donc le trou grandit de la marge.
+ */
+const HALO = EYE_MARGIN * 2 * R
 
 let raf = 0
 let nextAt = Infinity
@@ -606,6 +615,41 @@ function dotAttrs(dot: BotFrame['dots'][number]) {
         <path :d="frame.bodyPath" />
       </clipPath>
 
+      <!--
+        Ce qui est peint SUR le corps s'arrete AVANT les yeux, pas au ras.
+
+        Le masque du corps leur perce deja des trous exacts, donc un vetement ne
+        pouvait pas les recouvrir — mais rien ne l'empechait de venir les lecher,
+        et un etat au regard bas (« yeux ecarquilles ») posait ses gelules en
+        plein milieu de l'orange. Un oeil borde d'un liseré de corps se lit au
+        premier plan ; colle au tissu, il se lit comme une tache dessus.
+
+        Le liseré est obtenu au trait sur la forme meme de l'oeil (`HALO`) :
+        c'est la meme geometrie, donc il suit le clignement et le regard sans
+        rien avoir a recalculer. Meme idee que l'encoche de la pastille.
+      -->
+      <mask
+        v-if="accessoiresPeints.length"
+        :id="garmentMaskId"
+        maskUnits="userSpaceOnUse"
+        :x="-VB"
+        :y="-VB"
+        :width="VB * 2"
+        :height="VB * 2"
+      >
+        <rect :x="-VB" :y="-VB" :width="VB * 2" :height="VB * 2" fill="#fff" />
+        <path
+          v-for="(eye, i) in frame.eyes"
+          :key="i"
+          :d="eye.d"
+          :transform="eye.matrix"
+          :opacity="eye.alpha"
+          fill="#000"
+          stroke="#000"
+          :stroke-width="HALO"
+        />
+      </mask>
+
       <linearGradient
         v-for="arc in frame.arcs"
         :id="`${uid}-${arc.id}`"
@@ -665,15 +709,18 @@ function dotAttrs(dot: BotFrame['dots'][number]) {
       <path :d="frame.bodyPath" :fill="props.paper" />
       <g :mask="`url(#${maskId})`">
         <rect :x="-VB" :y="-VB" :width="VB * 2" :height="VB * 2" :fill="ink" />
-        <!-- vetements : DANS le masque, donc decoupes par la silhouette et
-             incapables de recouvrir les yeux -->
-        <path
-          v-for="(objet, i) in accessoiresPeints"
-          :key="`av${i}`"
-          :d="objet.d"
-          :fill="teinte(objet)"
-          :opacity="objet.opacity"
-        />
+        <!-- vetements : DANS le masque du corps, donc decoupes par la
+             silhouette, et dans celui du visage, qui les tient a distance des
+             yeux -->
+        <g :mask="`url(#${garmentMaskId})`">
+          <path
+            v-for="(objet, i) in accessoiresPeints"
+            :key="`av${i}`"
+            :d="objet.d"
+            :fill="teinte(objet)"
+            :opacity="objet.opacity"
+          />
+        </g>
       </g>
 
       <!-- objets qui debordent du corps : le casque se pose sur le crane, et

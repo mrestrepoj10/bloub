@@ -1,7 +1,7 @@
 import type { AccessoryId, AccessoryRole, BotAccessory, HeadTilt } from './accessories'
 import { arcRender, type ArcRender, type DotRender } from './decor'
 import { blendExpression, type BotExpression } from './expressions'
-import { REST_GAZE, blinkScale, eyePoses, headTop, liveliness } from './face'
+import { REST_GAZE, blinkScale, eyePoses, headLean, headTop, liveliness } from './face'
 import { clamp, easings, lerp, r2 } from './math'
 import {
   blend,
@@ -442,6 +442,9 @@ export class BotEngine {
       const head: HeadTilt = {
         x: pole.x - REPOS_TOP.x,
         y: pole.y - REPOS_TOP.y,
+        // absolue pour ce qui se pose sur la tete, en ecart pour ce qui pend au
+        // corps : voir `HeadTilt`.
+        lean: headLean(gaze),
         roll: gaze.roll - REST_GAZE.roll
       }
       for (const { acc, alpha } of this.accAtTime(now)) {

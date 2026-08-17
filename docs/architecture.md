@@ -92,8 +92,20 @@ exactly where it was tuned, and things only move when the gaze really moves.
 trap this function exists for. On a sphere the pole tips backward as the head
 lifts, so its projection comes back *down* the screen — a hat pinned to it would
 sink exactly when the bot looks up. The anchor is taken 50° off the pole toward the
-face, where a hat is actually worn: it rises with the gaze, slides with the yaw and
-leans with the roll.
+face, where a hat is actually worn: it rises with the gaze and slides with the yaw.
+
+**The tilt is the one measure that isn't a gap** (`HeadTilt.lean`, from
+`headLean`). What sits on a head is perpendicular to that head's axis, whatever
+the axis is doing — and at rest the axis already leans -26° on screen, because a
+head turned and raised looks tilted even at zero roll. Measured as a gap, the hat
+came out perfectly level on a visibly tilted head and read as floating on it. The
+hat pivots around the **ball's centre** rather than around its own seat: around
+the seat it would rock in place, one edge digging into the skull while the other
+lifted off it and let the crown show through; around the centre it slides along
+the sphere at constant radius, so it stays chaired — and the reach is untouched,
+a rotation about the centre preserving distances. What *hangs* on the body rather
+than sitting on the head uses the gap instead (`HeadTilt.roll`): a garment follows
+gravity, it doesn't go askew because the head turned.
 
 The motion is damped and clamped, per object (`*_SUIVI`, `*_ROULIS`), because the
 head turns far more than what sits on it — the anchor travels 0.9 radius between
@@ -136,13 +148,21 @@ and the burst particles *are* drawn behind the body to be occluded by it, the bo
 is backed by an opaque path in the page's `paper` colour. Without it, a ring
 passing behind the ball reappears inside the eyes.
 
-The mask is also what dresses the bot: the vest is drawn **inside** it, so the
-silhouette cuts it to shape and it cannot cover the eyes, whatever body it is worn
-on. What sticks out of the body can't use that mask — the hat has to be painted over
-the ball — so the same eye holes are punched a second time, into a mask of their own
-(clipped to the body, or the hole would open onto nothing outside the silhouette).
-Without it the brim would plug an eye on the flatter shapes, where the eyes ride
-higher than the top of the skull.
+The mask is also what dresses the bot, and there are three of them for it. The vest
+is drawn **inside** the body mask, so the silhouette cuts it to shape and it cannot
+cover the eyes, whatever body it is worn on. What sticks out of the body can't use
+that mask — the hat has to be painted over the ball — so the same eye holes are
+punched a second time, into a mask of their own (clipped to the body, or the hole
+would open onto nothing outside the silhouette). Without it the brim would plug an
+eye on the flatter shapes, where the eyes ride higher than the top of the skull.
+
+The third one keeps a garment at a **distance** from the eyes rather than merely
+off them (`EYE_MARGIN`). Not covering them was not enough: a state that looks down
+(`wide`) puts its lenses in the middle of the orange, and an eye touching fabric
+reads as a stain on it, where an eye ringed with body colour reads as being in
+front. The ring is a stroke on the eye's own path, so it follows the blink and the
+gaze with nothing to recompute — same idea as the notification pastille's notch.
+`svgAnime` animates the eyes of *every* mask for that reason.
 
 ## Anything sitting "on" the body must follow its real radius
 

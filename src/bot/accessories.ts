@@ -75,12 +75,24 @@ export interface HeadTilt {
   /** deplacement du sommet du crane, en unites de rayon de boule */
   x: number
   y: number
-  /** roulis, en degres, ecart a la pose de repos */
+  /**
+   * Inclinaison ABSOLUE de l'axe de la tete a l'ecran, en degres. Pas un ecart :
+   * ce qui se porte SUR la tete est perpendiculaire a son axe, quel qu'il soit —
+   * au repos deja, ou la tete penche de -26deg. Un casque pose bien droit sur
+   * une tete inclinee a l'air de flotter dessus, et c'est ce qui se voyait.
+   */
+  lean: number
+  /**
+   * Roulis, en degres, ECART a la pose de repos. Pour ce qui pend au corps
+   * plutot que de se poser sur la tete : un vetement suit la pesanteur, il ne se
+   * met pas de travers parce que la tete est tournee. Il ne bouge donc que
+   * lorsqu'elle bouge.
+   */
   roll: number
 }
 
 /** Tete droite, au repos : ce que voit un appel qui ne pilote pas la pose. */
-export const NO_TILT: HeadTilt = { x: 0, y: 0, roll: 0 }
+export const NO_TILT: HeadTilt = { x: 0, y: 0, lean: 0, roll: 0 }
 
 export interface BotAccessory {
   id: AccessoryId
@@ -221,7 +233,18 @@ const CASQUE_NERVURE_L = 0.22
  * au-dessus des que le regard se leve.
  */
 const CASQUE_SUIVI = 0.32
-const CASQUE_ROULIS = 0.45
+/**
+ * Part de l'inclinaison de la tete que le casque prend, et il la prend AUTOUR
+ * DU CENTRE DE LA BOULE.
+ *
+ * Autour de son assise, il basculerait sur place : un bord s'enfoncerait dans le
+ * crane pendant que l'autre decollerait, et la tete ressortirait par le trou.
+ * Autour du centre, il glisse sur la sphere en gardant son rayon — donc il reste
+ * chausse — exactement comme un decor peint sur une boule qui tourne. Ca ne
+ * change rien a sa portee non plus, une rotation autour du centre conservant les
+ * distances.
+ */
+const CASQUE_ROULIS = 0.35
 /**
  * Bornes de l'assise, en fraction du crane. Elles bornent du meme coup la
  * portee de l'objet (`reach`), donc le cadre d'export : sans elles, une pose
@@ -253,9 +276,8 @@ function casque(body: BodyMetrics, head: HeadTilt): AccessoryPart[] {
   const ecart = clamp(head.x * CASQUE_SUIVI, -CASQUE_ECART, CASQUE_ECART) * crane
   const cx = (corde ? (corde.x0 + corde.x1) / 2 : 0) + ecart
   const hauteur = demi * CASQUE_COQUE
-  // Il penche AUTOUR DE SON ASSISE et non autour du centre de la boule : un
-  // casque bascule sur la tete, il n'orbite pas autour d'elle.
-  const roule = (pts: Point[]) => pivot(pts, cx, assise, head.roll * CASQUE_ROULIS)
+  // Puis tout l'objet s'incline avec l'axe de la tete, autour du centre.
+  const roule = (pts: Point[]) => pivot(pts, 0, 0, head.lean * CASQUE_ROULIS)
 
   // La calotte, sa nervure eclairee, et la visiere qui reste dans son ombre.
   return [
