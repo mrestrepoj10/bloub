@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import BotTile from '@/components/BotTile.vue'
 import { POSES, SEQUENCE, STATE_BY_ID, type StateId } from '@/bot/states'
+import type { TweakMap } from '@/bot/accessories'
 import { t } from '@/i18n'
 
 /**
@@ -15,6 +16,7 @@ defineProps<{
   accessories: string[]
   finish: string
   accent: string
+  tweaks: TweakMap
 }>()
 const emit = defineEmits<{ pick: [state: StateId] }>()
 
@@ -103,6 +105,7 @@ function pick(state: StateId) {
         :accessories="accessories"
         :finish="finish"
         :accent="accent"
+        :tweaks="tweaks"
         :frozen-at="POSES[s.id]"
         @click="pick(s.id)"
       />

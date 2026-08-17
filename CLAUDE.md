@@ -89,6 +89,15 @@ Details and the reasoning behind each are in [docs/](docs/):
   `reach` is declared for the REST pose only, because that's all a still export can
   contain; a tilted head goes past the tight frame but only ever on screen or in a
   cycle export, both on the wide viewBox.
+- **An accessory declares its own KNOBS** (`AccessoryKnob`), and a knob is always an
+  offset from the measured drawing — 1 for a factor, 0 for a shift — so a slider left
+  alone renders the calibrated object and "reset" is a deletion. The engine takes them
+  as configuration, applied at once and outside the cross-fade: a slider must answer on
+  the frame. Consequence: **there is no declared `reach`** — an accessory's footprint is
+  MEASURED on its drawing (`accessoryReach`), the way `RAYON_MAX` is computed, because
+  no constant can bound a size the user sets by hand. Both frames follow it: the export
+  one (`demiCadre`) and the SCREEN one (`demiEcran`), which opens past 158 when a
+  tweaked object no longer fits and never closes below it.
 - **An accessory declares ROLES, a finish paints them** (`finishes.ts`). Geometry
   carries `corps` / `clair` / `sombre` / `bande`, never a hex, so a new colour scheme
   costs no geometry and a new object costs no colour. The engine emits the role and

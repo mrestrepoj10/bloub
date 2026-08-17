@@ -11,10 +11,11 @@
  */
 
 import { createApp, h, nextTick, ref } from 'vue'
+import type { TweakMap } from '@/bot/accessories'
 import BloubBot from '@/components/BloubBot.vue'
 import type { Block } from '@/bot/cycles'
 import { gifAnime, gifIndexe, indexe, nouvellePalette, recense, svgAnime } from './anime'
-import { DEMI_ECRAN, demiCadre, sansCommentaires, viewBoxExport } from './export'
+import { demiCadre, demiEcran, sansCommentaires, viewBoxExport } from './export'
 
 /**
  * Serialise le SVG affiche en un document autonome, recadre sur la boule.
@@ -133,6 +134,20 @@ export async function copieTexte(texte: string) {
   await navigator.clipboard.writeText(texte)
 }
 
+/**
+ * Cadre d'un export de CYCLE : le viewBox de l'ecran, elargi si besoin par ce
+ * que le bot porte. C'est le meme calcul que celui du composant, donc la video
+ * cadre exactement comme la scene.
+ */
+const cadreCycle = (reglages: ReglagesBot) =>
+  viewBoxExport(
+    demiEcran({
+      shape: reglages.shape,
+      accessories: reglages.accessories,
+      tweaks: reglages.tweaks
+    })
+  )
+
 /** Combien d'images faites sur combien, pour la barre de progression. */
 export type Avancement = (fait: number, total: number) => void
 
@@ -162,7 +177,7 @@ export async function cycleVersMp4(
       Math.round(1 / pas),
       async (i) => {
         const svg = await lecteur.rendre(i * pas)
-        await dessine(svgAutonome(svg, taille, viewBoxExport(DEMI_ECRAN)), taille, canvas, fond)
+        await dessine(svgAutonome(svg, taille, cadreCycle(reglages)), taille, canvas, fond)
       },
       avance
     )
@@ -192,7 +207,7 @@ export async function cycleVersGif(
 ): Promise<Blob> {
   const canvas = document.createElement('canvas')
   const lecteur = await ouvreCycle(reglages, blocs, taille, fond ?? undefined)
-  const vue = viewBoxExport(DEMI_ECRAN)
+  const vue = cadreCycle(reglages)
   const pixels = async (i: number) => {
     const svg = await lecteur.rendre(i * pas)
     const ctx = await dessine(svgAutonome(svg, taille, vue), taille, canvas, fond)
@@ -227,13 +242,22 @@ export interface ReglagesBot {
   /** finition de ces objets, et sa couleur d'accent */
   finish: string
   accent: string
+  /** retouches a la main, par objet */
+  tweaks: TweakMap
 }
 
 /**
  * Cadre d'un export FIXE de l'avatar : il s'elargit si ce qu'il porte depasse de
  * lui. Un casque coupe au sommet passerait pour un defaut du fichier livre.
  */
-const cadre = (reglages: ReglagesBot) => viewBoxExport(demiCadre(reglages.accessories))
+const cadre = (reglages: ReglagesBot) =>
+  viewBoxExport(
+    demiCadre({
+      shape: reglages.shape,
+      accessories: reglages.accessories,
+      tweaks: reglages.tweaks
+    })
+  )
 
 /**
  * Rend la sequence image par image, sur une instance HORS ECRAN.

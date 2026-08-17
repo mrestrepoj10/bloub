@@ -36,6 +36,8 @@ const zh: typeof fr = {
     finish: '配色',
     accent: '强调色',
     custom: '自定义颜色',
+    tweaks: '微调 — {objet}',
+    reset: '重置',
     color: '颜色'
   },
 
@@ -152,6 +154,20 @@ const zh: typeof fr = {
   accessories: {
     casque: '安全帽',
     gilet: '反光背心'
+  },
+
+  knobs: {
+    taille: '大小',
+    largeur: '宽度',
+    hauteur: '高度',
+    visiere: '帽檐',
+    epaisseur: '边缘',
+    nervure: '棱脊',
+    col: '领口',
+    bandes: '反光条',
+    x: '水平',
+    y: '垂直',
+    angle: '倾斜'
   },
 
   finishes: {

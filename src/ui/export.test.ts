@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { ACCESSORIES } from '@/bot/accessories'
-import { SHAPES } from '@/bot/skins'
+import { ACCESSORIES, accessoryReach, type TweakMap } from '@/bot/accessories'
+import { SHAPES, SHAPE_BY_ID } from '@/bot/skins'
 import {
   ACTIONS,
   BLANC,
@@ -18,6 +18,7 @@ import {
   ACTION_DEFAUT,
   DEMI_CADRE,
   demiCadre,
+  demiEcran,
   RAYON_MAX,
   nomFichier,
   sansCommentaires,
@@ -70,35 +71,81 @@ describe('cadre d export', () => {
 })
 
 describe('cadre d un bot equipe', () => {
+  const CERCLE = SHAPE_BY_ID.get('cercle')!.radii
+
   /*
    * Le pendant du test ci-dessus pour ce que le bot PORTE : le casque monte a
-   * 1,28 rayon quand la plus large des formes s'arrete a 1,15. Sur le cadre nu,
+   * 1,3 rayon quand la plus large des formes s'arrete a 1,15. Sur le cadre nu,
    * il se ferait trancher au sommet sans que rien ne le signale.
    */
   it('s elargit pour ce qui depasse de la boule', () => {
     for (const acc of ACCESSORIES) {
-      const demi = demiCadre([acc.id])
-      expect(acc.reach * RAYON_BOULE, `« ${acc.id} » depasse du cadre`).toBeLessThan(demi)
+      const demi = demiCadre({ shape: 'cercle', accessories: [acc.id] })
+      const portee = accessoryReach(acc, CERCLE) * RAYON_BOULE
+      expect(portee, `« ${acc.id} » depasse du cadre`).toBeLessThan(demi)
     }
-    expect(demiCadre(['casque'])).toBeGreaterThan(DEMI_CADRE)
+    expect(demiCadre({ accessories: ['casque'] })).toBeGreaterThan(DEMI_CADRE)
   })
 
   it('ne recule pas pour un objet entierement decoupe par le corps', () => {
     // Le gilet ne deborde de rien : elargir le cadre ne ferait que rapetisser
     // la boule dans l'image exportee.
-    expect(demiCadre(['gilet'])).toBe(DEMI_CADRE)
-    expect(demiCadre([])).toBe(DEMI_CADRE)
+    expect(demiCadre({ accessories: ['gilet'] })).toBe(DEMI_CADRE)
+    expect(demiCadre({ accessories: [] })).toBe(DEMI_CADRE)
+    expect(demiCadre()).toBe(DEMI_CADRE)
   })
 
   it('ignore un id inconnu', () => {
     // La liste vient du localStorage, elle n'est pas sure.
-    expect(demiCadre(['chapeau'])).toBe(DEMI_CADRE)
+    expect(demiCadre({ accessories: ['chapeau'] })).toBe(DEMI_CADRE)
   })
 
-  it('reste dans le viewBox de l ecran', () => {
-    // L'export d'un CYCLE part du viewBox de l'ecran : s'il fallait l'elargir
-    // aussi, les anneaux des etats animes changeraient de taille avec un casque.
-    expect(demiCadre(ACCESSORIES.map((a) => a.id))).toBeLessThan(DEMI_ECRAN)
+  /*
+   * LE test des reglages fins : la taille du casque se regle a la main, donc
+   * aucune constante ecrite d'avance ne borne son encombrement. Le cadre est
+   * mesure sur le dessin obtenu, sinon un casque agrandi se ferait trancher.
+   */
+  it('suit les retouches a la main', () => {
+    const nu = demiCadre({ shape: 'cercle', accessories: ['casque'] })
+    const gros = demiCadre({
+      shape: 'cercle',
+      accessories: ['casque'],
+      tweaks: { casque: { taille: 1.5 } }
+    })
+    const petit = demiCadre({
+      shape: 'cercle',
+      accessories: ['casque'],
+      tweaks: { casque: { taille: 0.6 } }
+    })
+    expect(gros).toBeGreaterThan(nu)
+    // rapetisse, l'objet ne commande plus rien : c'est la forme qui cadre
+    expect(petit).toBe(DEMI_CADRE)
+  })
+
+  /*
+   * Pousse a fond, un casque regle a la main sort du viewBox de l'ecran : c'est
+   * pour ca que celui-la s'ouvre aussi (`demiEcran`). Ce qui doit tenir, c'est
+   * que l'ecran contienne toujours le cadre serre — sinon la scene rognerait ce
+   * que l'export fixe, lui, montre entier.
+   */
+  it('garde l ecran au moins aussi large que le cadre serre', () => {
+    const fond: TweakMap = { casque: { taille: 1.5, hauteur: 1.8, visiere: 2.5, y: -0.4 } }
+    for (const forme of SHAPES) {
+      for (const tweaks of [{}, fond]) {
+        const eq = { shape: forme.id, accessories: ACCESSORIES.map((a) => a.id), tweaks }
+        expect(demiEcran(eq), `« ${forme.id} »`).toBeGreaterThanOrEqual(demiCadre(eq))
+      }
+    }
+  })
+
+  it('ne referme jamais l ecran en dessous de sa taille normale', () => {
+    // La taille apparente du bot ne doit pas dependre de ce qu'il porte tant
+    // que ca tient dans le cadre normal.
+    expect(demiEcran()).toBe(DEMI_ECRAN)
+    expect(demiEcran({ accessories: ['casque', 'gilet'] })).toBe(DEMI_ECRAN)
+    expect(
+      demiEcran({ accessories: ['casque'], tweaks: { casque: { taille: 1.5, hauteur: 1.8 } } })
+    ).toBeGreaterThan(DEMI_ECRAN)
   })
 })
 

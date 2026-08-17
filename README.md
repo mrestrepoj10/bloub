@@ -27,8 +27,9 @@ only gate, so run `pnpm build` before you call something done.
 
 The rail on the left switches between three views. **Customise** offers 8 body
 shapes, 16 rest expressions, 12 colours and 2 site accessories (hard hat, hi-vis
-vest) — with 4 finishes for those (site, fluoro, tone on tone, accent) and a colour
-picker for the accent one. All of it is kept between visits. **Animations** is
+vest) — with 4 finishes for those (site, fluoro, tone on tone, accent), a colour
+picker for the accent one, and a slider per accessory dimension: size, each piece's
+geometry, position and tilt. All of it is kept between visits. **Animations** is
 a small editor: arrange states into a timeline, set how long each is held, save the
 result. **Settings** holds the language (French, English or Chinese) and the
 credits.
@@ -95,7 +96,7 @@ index is what identifies where you are; `state` follows it as an output. Pass
 is how the thumbnails and the state board are drawn.
 
 Props: `size`, `shape`, `color`, `expression`, `accessories`, `finish`, `accent`,
-`paper`, `frozenAt`, `cycle`, `follow`, `gaze`. Models: `block`, `state`, `playing`, `elapsed`. See
+`tweaks`, `paper`, `frozenAt`, `cycle`, `follow`, `gaze`. Models: `block`, `state`, `playing`, `elapsed`. See
 [BloubBot.vue](src/components/BloubBot.vue) for the details.
 
 ## License

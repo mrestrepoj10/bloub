@@ -6,6 +6,7 @@ import { BotEngine, type BotFrame } from '@/bot/engine'
 import { clamp, easings } from '@/bot/math'
 import { t } from '@/i18n'
 import { lookTarget, TURN_TIME, type GazeScript } from '@/ui/gaze'
+import { demiEcran } from '@/ui/export'
 import {
   DEFAULT_EXPRESSION,
   EXPRESSION_BY_ID
@@ -17,7 +18,12 @@ import {
   SHAPE_BY_ID,
   mixHex
 } from '@/bot/skins'
-import { ACCESSORIES, ACCESSORY_BY_ID, type BotAccessory } from '@/bot/accessories'
+import {
+  ACCESSORIES,
+  ACCESSORY_BY_ID,
+  type BotAccessory,
+  type TweakMap
+} from '@/bot/accessories'
 import { DEFAULT_ACCENT, DEFAULT_FINISH, accessoryColors } from '@/bot/finishes'
 import { blockAt, defaultCycle, offsetOf, type Block } from '@/bot/cycles'
 import { STATE_BY_ID, type StateId } from '@/bot/states'
@@ -41,6 +47,8 @@ const props = withDefaults(
     finish?: string
     /** couleur d'accent, id de la palette ou hex libre de la pipette */
     accent?: string
+    /** retouches a la main des objets portes, par identifiant d'objet */
+    tweaks?: TweakMap
     /** couleur du fond, utilisee pour la brume de profondeur des particules */
     paper?: string
     /**
@@ -76,6 +84,7 @@ const props = withDefaults(
     accessories: () => [],
     finish: DEFAULT_FINISH,
     accent: DEFAULT_ACCENT,
+    tweaks: () => ({}),
     paper: '#f9f9f9',
     frozenAt: undefined,
     cycle: () => defaultCycle().blocks,
@@ -98,7 +107,14 @@ const elapsed = defineModel<number>('elapsed', { default: 0 })
 
 /** Rayon de la boule au repos en unites de viewBox ; la marge loge les anneaux. */
 const R = 100
-const VB = 158
+/**
+ * Demi-cote du viewBox. 158 en temps normal — la marge qui loge les anneaux —
+ * mais il s'ouvre si un objet regle trop grand n'y tient plus, sinon le casque
+ * se ferait trancher a l'ecran. Voir `demiEcran`.
+ */
+const VB = computed(() =>
+  demiEcran({ shape: props.shape, accessories: props.accessories, tweaks: props.tweaks })
+)
 
 const shapeRadii = computed(() => SHAPE_BY_ID.get(props.shape)?.radii ?? null)
 const ink = computed(() => COLOR_BY_ID.get(props.color)?.hex ?? '#0a0a0c')
@@ -125,7 +141,14 @@ const teintes = computed(() => {
   return new Map(ACCESSORIES.map((a) => [a.id, accessoryColors(a, ctx)]))
 })
 
-const engine = new BotEngine(R, state.value, shapeRadii.value, expression.value, accessories.value)
+const engine = new BotEngine(
+  R,
+  state.value,
+  shapeRadii.value,
+  expression.value,
+  accessories.value,
+  props.tweaks
+)
 const frame = shallowRef<BotFrame>(engine.sample(props.frozenAt ?? 0))
 const uid = Math.random().toString(36).slice(2, 8)
 const maskId = `bot-mask-${uid}`
@@ -445,6 +468,16 @@ watch(accessories, (list) => {
   engine.setAccessories(list, clock)
   redrawFrozen()
 })
+
+// Les reglages s'appliquent d'un coup : c'est une commande, pas une animation.
+watch(
+  () => props.tweaks,
+  (t) => {
+    engine.setTweaks(t)
+    redrawFrozen()
+  },
+  { deep: true }
+)
 
 /**
  * Deplacer `frozenAt` redessine. La prop ne servait qu'a poser une vignette une

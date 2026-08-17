@@ -54,6 +54,12 @@ export default {
      */
     accent: "Couleur d'accent",
     custom: 'Couleur libre',
+    /**
+     * Titre du bloc de reglages fins. Nomme l'OBJET reglé — il y en a un bloc
+     * par objet porte, et « Reglages » tout court ne dirait pas lequel.
+     */
+    tweaks: 'Réglages — {objet}',
+    reset: 'Réinitialiser',
     color: 'Couleur'
   },
 
@@ -184,6 +190,24 @@ export default {
   accessories: {
     casque: 'Casque',
     gilet: 'Gilet'
+  },
+
+  /**
+   * Curseurs de reglage fin. Les libelles sont courts : ils tiennent dans une
+   * colonne de 4 rem a cote du curseur, et la vignette montre deja l'effet.
+   */
+  knobs: {
+    taille: 'Taille',
+    largeur: 'Largeur',
+    hauteur: 'Hauteur',
+    visiere: 'Visière',
+    epaisseur: 'Bord',
+    nervure: 'Nervure',
+    col: 'Col',
+    bandes: 'Bandes',
+    x: 'Horizontal',
+    y: 'Vertical',
+    angle: 'Inclinaison'
   },
 
   /** Comment les objets portes sont peints. */

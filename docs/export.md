@@ -78,10 +78,15 @@ the frame on its own instead of getting clipped.
 
 It does widen for what the bot **wears**, though (`demiCadre`): the hard hat reaches
 1.30 ball radii where the widest shape stops at 1.15, so on the bare frame it would be
-sliced off at the top with nothing to signal it. The widening is driven by the `reach`
-each accessory declares and by the ones actually worn — the vest is entirely clipped by
-the body, so it never pushes the frame back for nothing. A cycle export is unaffected: it
-already runs on the screen's ±158, which contains the hat too.
+sliced off at the top with nothing to signal it. The footprint is *measured* on the
+object's own drawing (`accessoryReach`) rather than declared, because its size is a
+slider — no constant written in advance could bound it — and it is measured on the
+shape and the objects actually worn, so a vest, entirely clipped by the body, never
+pushes the frame back for nothing.
+
+The **screen** frame follows the same rule (`demiEcran`): ±158 normally, opened just
+enough when a hand-tweaked object no longer fits, and never closed below. A cycle
+export runs on that same frame, so the video crops exactly like the scene.
 
 ## The animation is an SVG, and that is what makes it smooth
 

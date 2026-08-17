@@ -15,6 +15,7 @@ import {
   type Block,
   type Cycle
 } from '@/bot/cycles'
+import type { TweakMap } from '@/bot/accessories'
 import type { StateId } from '@/bot/states'
 import { MAX_ZOOM, MIN_ZOOM, mmss } from '@/ui/timeline'
 import { nomDeCycle, pluriel, t } from '@/i18n'
@@ -33,6 +34,7 @@ const props = defineProps<{
   accessories: string[]
   finish: string
   accent: string
+  tweaks: TweakMap
 }>()
 
 /**
@@ -242,6 +244,7 @@ function onRemove() {
         :accessories="accessories"
         :finish="finish"
         :accent="accent"
+        :tweaks="tweaks"
         @update:blocks="(b: Block[]) => edit({ blocks: b })"
         @add="(s: StateId) => edit({ blocks: blocksWith(blocks, s) })"
         @seek="emit('seek', $event)"

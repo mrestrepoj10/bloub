@@ -10,6 +10,7 @@ import {
   totalDuration,
   type Block
 } from '@/bot/cycles'
+import type { TweakMap } from '@/bot/accessories'
 import { POSES, type StateId } from '@/bot/states'
 import { BASE_SCALE, clampZoom, ticksFor } from '@/ui/timeline'
 import { secondes, secondesCourtes, t } from '@/i18n'
@@ -30,6 +31,7 @@ const props = defineProps<{
   accessories: string[]
   finish: string
   accent: string
+  tweaks: TweakMap
 }>()
 
 const emit = defineEmits<{
@@ -370,6 +372,7 @@ function onRulerMove(e: PointerEvent) {
                   :accessories="accessories"
                   :finish="finish"
                   :accent="accent"
+                  :tweaks="tweaks"
                   :paper="i === block ? '#ffffff' : '#f2f2f2'"
                   :frozen-at="POSES[b.state]"
                 />
@@ -428,6 +431,7 @@ function onRulerMove(e: PointerEvent) {
               :accessories="accessories"
               :finish="finish"
               :accent="accent"
+              :tweaks="tweaks"
               @pick="emit('add', $event)"
             />
           </li>

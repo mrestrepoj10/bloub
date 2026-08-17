@@ -4,8 +4,8 @@
  * vit dans `capture.ts`, elle, parce qu'elle a besoin d'un canvas.
  */
 
-import { ACCESSORY_BY_ID } from '@/bot/accessories'
-import { SHAPES } from '@/bot/skins'
+import { ACCESSORY_BY_ID, accessoryReach, type TweakMap } from '@/bot/accessories'
+import { SHAPE_BY_ID, SHAPES } from '@/bot/skins'
 
 /**
  * Rayon de la boule au repos, en unites de viewBox : c'est le `scale` que
@@ -29,8 +29,42 @@ const MARGE = 1.08
  */
 export const RAYON_MAX = Math.max(...SHAPES.map((forme) => Math.max(...forme.radii)))
 
+/** Ce que le bot porte, pour cadrer l'image autour. */
+export interface Equipement {
+  shape?: string
+  accessories?: readonly string[]
+  tweaks?: TweakMap
+}
+
 /**
- * Demi-cote du cadre d'export, en unites de viewBox.
+ * Le cadre s'ELARGIT quand le bot porte quelque chose qui depasse de lui. Le
+ * casque monte a 1.3 rayon la ou la plus large des formes s'arrete a 1.15 : sur
+ * le cadre nu, il se ferait trancher au sommet sans que rien ne le signale.
+ *
+ * L'encombrement est MESURE sur le dessin de l'objet (`accessoryReach`) et non
+ * lu dans une constante, pour la meme raison que `RAYON_MAX` est calcule : la
+ * taille du casque se regle a la main, donc aucune valeur ecrite d'avance ne
+ * saurait la borner. Mesure sur la forme choisie et sur les objets REELLEMENT
+ * portes — un gilet, entierement decoupe par le corps, ne fait donc pas reculer
+ * le cadre pour rien.
+ */
+export function demiCadre(equipement: Equipement = {}): number {
+  return Math.ceil(RAYON_BOULE * Math.max(RAYON_MAX, portee(equipement)) * MARGE)
+}
+
+/** Encombrement de ce qui est porte, en unites de rayon de boule. */
+function portee({ shape, accessories = [], tweaks = {} }: Equipement): number {
+  const radii = (shape && SHAPE_BY_ID.get(shape)?.radii) || SHAPE_BY_ID.get('cercle')!.radii
+  let max = 0
+  for (const id of accessories) {
+    const acc = ACCESSORY_BY_ID.get(id)
+    if (acc) max = Math.max(max, accessoryReach(acc, radii, tweaks[acc.id]))
+  }
+  return max
+}
+
+/**
+ * Demi-cote du cadre d'export d'un bot NU, en unites de viewBox.
  *
  * Il est plus SERRE que le viewBox de l'ecran (158), et c'est volontaire : la
  * marge de l'ecran loge les anneaux des etats animes, qui n'existent pas au
@@ -40,23 +74,9 @@ export const RAYON_MAX = Math.max(...SHAPES.map((forme) => Math.max(...forme.rad
  * Un seul cadre pour les huit formes, et pas un recadrage forme par forme : les
  * rayons de `skins.ts` sont normalises pour que « toutes les formes pesent
  * pareil a l'oeil », or les recadrer separement remettrait chacune a la meme
- * taille et casserait ce reglage.
+ * taille et casserait ce reglage. Ce qui est PORTE, en revanche, elargit bien le
+ * cadre (`demiCadre`) : un casque agrandi n'a pas a se faire trancher.
  */
-/**
- * Le cadre s'ELARGIT quand le bot porte quelque chose qui depasse de lui. Le
- * casque monte a 1.28 rayon la ou la plus large des formes s'arrete a 1.15 : sur
- * le cadre nu, il se ferait trancher au sommet sans que rien ne le signale.
- *
- * Calcule d'apres la portee declaree dans le catalogue et non ecrit en dur, pour
- * la meme raison que `RAYON_MAX` : un objet plus haut deplace le cadre tout seul.
- * Et calcule d'apres les objets REELLEMENT portes — un gilet, entierement
- * decoupe par le corps, ne fait donc pas reculer le cadre pour rien.
- */
-export function demiCadre(accessoires: readonly string[] = []): number {
-  const portees = accessoires.map((id) => ACCESSORY_BY_ID.get(id)?.reach ?? 0)
-  return Math.ceil(RAYON_BOULE * Math.max(RAYON_MAX, ...portees) * MARGE)
-}
-
 export const DEMI_CADRE = demiCadre()
 
 /** viewBox du document exporte, centre sur la boule. */
@@ -76,6 +96,31 @@ export function viewBoxExport(demi = DEMI_CADRE) {
  * `RINGS` et `SWOOSH` (decor.ts) qui les tient sous 158.
  */
 export const DEMI_ECRAN = 158
+
+/**
+ * Marge du viewBox de l'ecran par rapport a la pose de repos : la tete bouge, et
+ * ce qu'elle porte va jusqu'a 12 % plus loin qu'au repos quand elle se penche a
+ * fond (mesure sur un balayage de poses).
+ */
+const MARGE_ECRAN = 1.15
+
+/**
+ * Demi-cote du viewBox AFFICHE, qui s'ouvre si ce qui est porte ne tient plus
+ * dedans.
+ *
+ * 158 suffit a tout ce que le bot fait tout seul — c'est la marge qui loge les
+ * anneaux. Mais la taille du casque se regle a la main : pousse a fond, il
+ * sortirait du cadre et se ferait trancher a l'ecran comme dans l'export d'un
+ * cycle, sans que rien ne le signale. Le cadre s'ouvre donc juste ce qu'il faut,
+ * ce qui rapetisse la boule d'autant — le prix a payer, et il est visible, donc
+ * comprehensible.
+ *
+ * Il ne se REFERME jamais en dessous de 158 : la taille apparente du bot ne doit
+ * pas dependre de ce qu'il porte tant que ca tient dans le cadre normal.
+ */
+export function demiEcran(equipement: Equipement = {}): number {
+  return Math.max(DEMI_ECRAN, Math.ceil(RAYON_BOULE * portee(equipement) * MARGE_ECRAN))
+}
 
 export type ActionId = 'png' | 'svg' | 'anime' | 'gif' | 'copie' | 'copieSvg'
 

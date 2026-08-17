@@ -1,4 +1,4 @@
-import type { AccessoryId, AccessoryRole, BotAccessory, HeadTilt } from './accessories'
+import type { AccessoryId, AccessoryRole, BotAccessory, HeadTilt, TweakMap } from './accessories'
 import { arcRender, type ArcRender, type DotRender } from './decor'
 import { blendExpression, type BotExpression } from './expressions'
 import { REST_GAZE, blinkScale, eyePoses, headLean, headTop, liveliness } from './face'
@@ -176,6 +176,7 @@ export class BotEngine {
   private acc: BotAccessory[] = []
   private accPrev: BotAccessory[] = []
   private accAt = -10
+  private tweaks: TweakMap = {}
   /** points de la silhouette a l'echelle 1, pour poser les objets dessus */
   private accPts: Point[] = []
   private look: Look = NO_LOOK
@@ -200,7 +201,8 @@ export class BotEngine {
     initial: StateId = 'idle',
     shape: number[] | null = null,
     expression: BotExpression | null = null,
-    accessories: BotAccessory[] = []
+    accessories: BotAccessory[] = [],
+    tweaks: TweakMap = {}
   ) {
     this.scale = scale
     this.cur = initial
@@ -209,6 +211,7 @@ export class BotEngine {
     // Poses des le depart et non par un `setAccessories` apres coup : une
     // vignette figee ne declenche aucun watcher, elle n'a que sa premiere image.
     this.acc = accessories
+    this.tweaks = tweaks
   }
 
   /**
@@ -225,6 +228,19 @@ export class BotEngine {
     this.accPrev = this.acc
     this.acc = list
     this.accAt = now
+  }
+
+  /**
+   * Retouches a la main des objets portes.
+   *
+   * Ce sont des REGLAGES et non une animation : ils s'appliquent d'un coup,
+   * comme l'echelle ou la couleur, et n'entrent pas dans le fondu. Un curseur
+   * qu'on tire doit repondre a l'image, pas trainer un quart de seconde
+   * derriere le doigt. `sample(t)` reste une fonction pure du temps A REGLAGE
+   * DONNE, ce qui est exactement ce que la rejouabilite demande.
+   */
+  setTweaks(tweaks: TweakMap) {
+    this.tweaks = tweaks
   }
 
   /**
@@ -450,7 +466,7 @@ export class BotEngine {
       for (const { acc, alpha } of this.accAtTime(now)) {
         const opacity = worn * alpha
         if (opacity <= 0.01) continue
-        for (const part of acc.parts(metrics, head)) {
+        for (const part of acc.parts(metrics, head, this.tweaks[acc.id])) {
           accessories.push({
             d: polyPath(part.pts, R),
             accessory: acc.id,

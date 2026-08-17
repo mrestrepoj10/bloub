@@ -54,7 +54,7 @@ import {
   totalDuration,
   type Cycle
 } from '@/bot/cycles'
-import { normalizeAccessories } from '@/bot/accessories'
+import { normalizeAccessories, normalizeTweaks, type TweakMap } from '@/bot/accessories'
 import { DEFAULT_ACCENT, DEFAULT_FINISH, FINISH_BY_ID, isCustomAccent } from '@/bot/finishes'
 import { DEFAULT_EXPRESSION, EXPRESSION_BY_ID } from '@/bot/expressions'
 import { COLOR_BY_ID, DEFAULT_COLOR, DEFAULT_SHAPE, SHAPE_BY_ID } from '@/bot/skins'
@@ -415,7 +415,28 @@ const accent = ref(
   stored(cle('accent'), DEFAULT_ACCENT, (v) => COLOR_BY_ID.has(v) || isCustomAccent(v))
 )
 
+/**
+ * Retouches a la main des objets portes. En JSON parce que c'est un objet a deux
+ * niveaux, relu par `normalizeTweaks` qui jette tout ce qui n'existe pas et
+ * borne le reste : le stockage n'est pas plus sur ici qu'ailleurs, et une valeur
+ * non finie rendrait un contour invisible sans rien pour le dire.
+ */
+const ajustements = ref<TweakMap>(lisTweaks())
+
+function lisTweaks(): TweakMap {
+  try {
+    return normalizeTweaks(JSON.parse(localStorage.getItem(cle('ajustements')) ?? '{}'))
+  } catch {
+    return {}
+  }
+}
+
 watch(accessoires, (v) => localStorage.setItem(cle('accessoires'), v.join(',')))
+watch(
+  ajustements,
+  (v) => localStorage.setItem(cle('ajustements'), JSON.stringify(v)),
+  { deep: true }
+)
 watch(finition, (v) => localStorage.setItem(cle('finition'), v))
 watch(accent, (v) => localStorage.setItem(cle('accent'), v))
 
@@ -558,7 +579,8 @@ async function exporteCycle() {
     expression: expression.value,
     accessories: accessoires.value,
     finish: finition.value,
-    accent: accent.value
+    accent: accent.value,
+    tweaks: ajustements.value
   }
   const suit = (fait: number, total: number) => (avancementCycle.value = fait / total)
 
@@ -638,7 +660,8 @@ async function exporte(id: ActionId, confirme = false) {
         expression: expression.value,
         accessories: accessoires.value,
       finish: finition.value,
-      accent: accent.value
+      accent: accent.value,
+      tweaks: ajustements.value
       }
       telecharge(await versSvgAnime(reglages, action.taille, ANIM_IMAGES, ANIM_PAS), nom())
       etatExport.value = 'exporte'
@@ -649,13 +672,24 @@ async function exporte(id: ActionId, confirme = false) {
         expression: expression.value,
         accessories: accessoires.value,
       finish: finition.value,
-      accent: accent.value
+      accent: accent.value,
+      tweaks: ajustements.value
       }
       const fond = couleurDeFond(fondGif.value)
       telecharge(await versGifAnime(reglages, action.taille, GIF_IMAGES, GIF_PAS, fond), nom())
       etatExport.value = 'exporte'
     } else {
-      const markup = svgAutonome(svg, action.taille, viewBoxExport(demiCadre(accessoires.value)))
+      const markup = svgAutonome(
+        svg,
+        action.taille,
+        viewBoxExport(
+          demiCadre({
+            shape: shape.value,
+            accessories: accessoires.value,
+            tweaks: ajustements.value
+          })
+        )
+      )
       if (action.mode === 'copieImage') {
         // Le blob part en PROMESSE et non attendu ici : cf. `copie` dans capture.ts.
         await copie(versPng(markup, action.taille))
@@ -719,6 +753,7 @@ watch(
           :accessories="accessoires"
           :finish="finition"
           :accent="accent"
+          :tweaks="ajustements"
           :frozen-at="POSES[s.id]"
         />
         <figcaption class="text-xs text-[var(--muted)]">{{ t(`states.${s.id}`) }}</figcaption>
@@ -830,6 +865,7 @@ watch(
             :accessories="accessoires"
             :finish="finition"
             :accent="accent"
+            :tweaks="ajustements"
             :follow="view === 'reglages'"
             :gaze="intro ? INTRO_GAZE : null"
           />
@@ -919,6 +955,7 @@ watch(
               :accessories="accessoires"
               :finish="finition"
               :accent="accent"
+              :tweaks="ajustements"
               :frozen-at="POSES[s.id]"
               @click="addBlock(s.id)"
             />
@@ -934,6 +971,7 @@ watch(
             v-model:accessories="accessoires"
             v-model:finish="finition"
             v-model:accent="accent"
+            v-model:tweaks="ajustements"
           />
         </template>
       </aside>
@@ -963,6 +1001,7 @@ watch(
       :accessories="accessoires"
       :finish="finition"
       :accent="accent"
+      :tweaks="ajustements"
       @seek="onSeek"
       @preview="preview = true"
         @exporter="dialogueCycle = true"

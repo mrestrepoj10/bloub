@@ -1,5 +1,6 @@
+import { REST_GAZE, headLean } from './face'
 import { TAU, clamp } from './math'
-import type { BodyMetrics, Point } from './shape'
+import { bodyMetrics, toPoints, type BodyMetrics, type Point } from './shape'
 
 /**
  * Objets portes par le bot : casque de chantier, gilet de securite.
@@ -94,29 +95,109 @@ export interface HeadTilt {
 /** Tete droite, au repos : ce que voit un appel qui ne pilote pas la pose. */
 export const NO_TILT: HeadTilt = { x: 0, y: 0, lean: 0, roll: 0 }
 
+/**
+ * La POSE DE REPOS, celle sur laquelle tout le placement est cale : la tete y
+ * penche deja de -26deg a l'ecran. C'est aussi la seule pose qu'un export fixe
+ * puisse contenir, donc celle qui sert a mesurer l'encombrement d'un objet.
+ */
+export const REST_TILT: HeadTilt = { x: 0, y: 0, lean: headLean(REST_GAZE), roll: 0 }
+
+/* ------------------------------------------------------- reglages fins */
+
+/**
+ * Ce qu'on peut retoucher a la main sur un objet porte.
+ *
+ * Les valeurs mesurees restent le point de depart : un reglage est un ECART a
+ * ce depart, jamais une valeur absolue. Un curseur laisse donc a zero (ou a un,
+ * pour un facteur) rend exactement le dessin calibre, et le bouton « remettre a
+ * zero » n'a rien a recalculer.
+ *
+ * Les identifiants sont enumeres pour que la couche i18n verifie leurs libelles
+ * a la compilation, comme partout ailleurs.
+ */
+export type KnobId =
+  | 'taille'
+  | 'largeur'
+  | 'hauteur'
+  | 'visiere'
+  | 'epaisseur'
+  | 'nervure'
+  | 'col'
+  | 'bandes'
+  | 'x'
+  | 'y'
+  | 'angle'
+
+export interface AccessoryKnob {
+  id: KnobId
+  /** valeur au repos : 1 pour un facteur, 0 pour un decalage */
+  base: number
+  min: number
+  max: number
+  step: number
+}
+
+/** Reglages d'un objet, par identifiant de curseur. */
+export type AccessoryTweaks = Partial<Record<KnobId, number>>
+/** Reglages de tous les objets. */
+export type TweakMap = Partial<Record<AccessoryId, AccessoryTweaks>>
+
+/**
+ * Valeur effective d'un curseur : celle reglee si elle tient dans les bornes,
+ * la valeur de repos sinon. Le stockage n'est pas sur, et une valeur non finie
+ * rendrait tout le contour `NaN` — donc invisible, sans rien pour le dire.
+ */
+export function knobValue(knob: AccessoryKnob, tweaks: AccessoryTweaks = {}): number {
+  const v = tweaks[knob.id]
+  return v === undefined || !Number.isFinite(v) ? knob.base : clamp(v, knob.min, knob.max)
+}
+
+/** Lecteur de curseurs pour un objet : `k('taille')` rend la valeur effective. */
+function reglages(knobs: AccessoryKnob[], tweaks: AccessoryTweaks = {}) {
+  return (id: KnobId) => {
+    const knob = knobs.find((k) => k.id === id)
+    return knob ? knobValue(knob, tweaks) : 0
+  }
+}
+
+/**
+ * Nettoie des reglages relus (stockage, prop) : objets et curseurs inconnus
+ * retires, valeurs bornees, non finies jetees. Une entree vide disparait, ce qui
+ * garde le stockage lisible.
+ */
+export function normalizeTweaks(brut: unknown): TweakMap {
+  if (!brut || typeof brut !== 'object') return {}
+  const out: TweakMap = {}
+  for (const acc of ACCESSORIES) {
+    const lu = (brut as Record<string, unknown>)[acc.id]
+    if (!lu || typeof lu !== 'object') continue
+    const garde: AccessoryTweaks = {}
+    for (const knob of acc.knobs) {
+      const v = (lu as Record<string, unknown>)[knob.id]
+      if (typeof v !== 'number' || !Number.isFinite(v)) continue
+      const borne = clamp(v, knob.min, knob.max)
+      if (borne !== knob.base) garde[knob.id] = borne
+    }
+    if (Object.keys(garde).length) out[acc.id] = garde
+  }
+  return out
+}
+
+/** Un objet est-il retouche ? Sert au bouton de remise a zero. */
+export const isTweaked = (tweaks: AccessoryTweaks | undefined) =>
+  !!tweaks && Object.keys(tweaks).length > 0
+
 export interface BotAccessory {
   id: AccessoryId
   slot: AccessorySlot
-  /**
-   * Distance maximale au centre atteinte par les parties NON decoupees, DANS LA
-   * POSE DE REPOS, en unites de rayon de boule. Le cadre d'export s'y ajuste
-   * (`demiCadre`, `src/ui/export.ts`) : sans elle, un casque qui depasse de la
-   * boule se ferait rogner en silence sur l'image exportee.
-   *
-   * Au repos et pas dans n'importe quelle pose, parce que c'est ce qu'un export
-   * FIXE contient : il rend `idle`, ou seule la derive du regard bouge encore
-   * (0.06 rayon). Une tete franchement penchee ne se voit qu'a l'ecran ou dans
-   * l'export d'un CYCLE, et ces deux-la tournent sur le viewBox large (±158),
-   * qui contient largement le mouvement. Les deux bornes sont verifiees sur les
-   * huit formes par `accessories.test.ts`.
-   */
-  reach: number
   /** Teinte de reference, celle du vrai materiel. */
   livery: string
   /** La meme, poussee au neon, pour la finition fluo. */
   fluo: string
-  /** Contours de l'objet pour la silhouette et la pose de tete a cet instant. */
-  parts(body: BodyMetrics, head: HeadTilt): AccessoryPart[]
+  /** Ce qui se regle a la main sur cet objet. */
+  knobs: AccessoryKnob[]
+  /** Contours de l'objet pour la silhouette, la pose de tete et les reglages. */
+  parts(body: BodyMetrics, head: HeadTilt, tweaks?: AccessoryTweaks): AccessoryPart[]
 }
 
 /* ------------------------------------------------------------- primitives */
@@ -255,7 +336,26 @@ const CASQUE_BAS = 0.55
 /** Debattement lateral maximal, en unites de rayon de boule. */
 const CASQUE_ECART = 0.18
 
-function casque(body: BodyMetrics, head: HeadTilt): AccessoryPart[] {
+/**
+ * Curseurs du casque : sa taille d'ensemble, la geometrie de chacune de ses
+ * pieces, sa place et son inclinaison. Les bornes sont larges — c'est un
+ * reglage de gout, pas une mesure — mais fermees des deux cotes : le cadre
+ * d'export se calcule sur le dessin obtenu, il faut qu'il reste fini.
+ */
+const CASQUE_KNOBS: AccessoryKnob[] = [
+  { id: 'taille', base: 1, min: 0.6, max: 1.5, step: 0.01 },
+  { id: 'largeur', base: 1, min: 0.6, max: 1.4, step: 0.01 },
+  { id: 'hauteur', base: 1, min: 0.5, max: 1.8, step: 0.01 },
+  { id: 'visiere', base: 1, min: 0, max: 2.5, step: 0.01 },
+  { id: 'epaisseur', base: 1, min: 0.2, max: 2.5, step: 0.01 },
+  { id: 'nervure', base: 1, min: 0, max: 2.5, step: 0.01 },
+  { id: 'x', base: 0, min: -0.4, max: 0.4, step: 0.005 },
+  { id: 'y', base: 0, min: -0.4, max: 0.4, step: 0.005 },
+  { id: 'angle', base: 0, min: -60, max: 60, step: 1 }
+]
+
+function casque(body: BodyMetrics, head: HeadTilt, tweaks?: AccessoryTweaks): AccessoryPart[] {
+  const k = reglages(CASQUE_KNOBS, tweaks)
   // Hauteur du crane : tout le casque s'exprime en fraction de cette mesure,
   // donc il grandit avec la tete au lieu d'etre cale sur le cercle seul.
   const crane = -body.top
@@ -267,24 +367,52 @@ function casque(body: BodyMetrics, head: HeadTilt): AccessoryPart[] {
     body.top * CASQUE_BAS
   )
   const corde = body.chordAt(assise)
-  const demi = Math.min(
-    Math.max(corde ? ((corde.x1 - corde.x0) / 2) * CASQUE_LARGEUR : 0, CASQUE_MINI * crane),
-    ((body.right - body.left) / 2) * CASQUE_MAXI
-  )
+  // La calotte est calee sur la corde du crane, puis retouchee : la taille
+  // d'ensemble et la largeur propre se multiplient, l'une emmenant tout l'objet
+  // (les autres pieces se mesurent sur elle), l'autre la calotte seule.
+  const demi =
+    Math.min(
+      Math.max(corde ? ((corde.x1 - corde.x0) / 2) * CASQUE_LARGEUR : 0, CASQUE_MINI * crane),
+      ((body.right - body.left) / 2) * CASQUE_MAXI
+    ) *
+    k('taille') *
+    k('largeur')
   // Et il glisse du cote ou la tete penche. L'ecart est borne : au-dela, le
   // casque depasserait du crane au lieu d'etre porte de travers.
   const ecart = clamp(head.x * CASQUE_SUIVI, -CASQUE_ECART, CASQUE_ECART) * crane
   const cx = (corde ? (corde.x0 + corde.x1) / 2 : 0) + ecart
-  const hauteur = demi * CASQUE_COQUE
-  // Puis tout l'objet s'incline avec l'axe de la tete, autour du centre.
-  const roule = (pts: Point[]) => pivot(pts, 0, 0, head.lean * CASQUE_ROULIS)
+  const hauteur = demi * CASQUE_COQUE * k('hauteur')
+  /*
+   * Deux rotations, et deux pivots differents : l'inclinaison AUTOMATIQUE suit
+   * l'axe de la tete et tourne autour du centre de la boule, pour que le casque
+   * glisse sur la sphere en restant chausse ; celle qu'on REGLE tourne autour de
+   * son assise, parce qu'un curseur d'inclinaison doit faire basculer l'objet
+   * sur place et non le promener autour du corps.
+   *
+   * Le decalage regle vient en dernier : c'est une translation franche du casque
+   * fini, donc previsible — le curseur deplace ce qu'on voit, sans rechausser
+   * l'objet ailleurs.
+   */
+  const pose = (pts: Point[]) =>
+    bouge(
+      pivot(pivot(pts, 0, 0, head.lean * CASQUE_ROULIS), cx, assise, k('angle')),
+      k('x'),
+      k('y')
+    )
 
   // La calotte, sa nervure eclairee, et la visiere qui reste dans son ombre.
   return [
-    { pts: roule(dome(cx, assise, demi, hauteur)), role: 'corps' },
-    { pts: roule(dome(cx, assise, demi * CASQUE_NERVURE_L, hauteur)), role: 'clair' },
+    { pts: pose(dome(cx, assise, demi, hauteur)), role: 'corps' },
+    { pts: pose(dome(cx, assise, demi * CASQUE_NERVURE_L * k('nervure'), hauteur)), role: 'clair' },
     {
-      pts: roule(ellipse(cx, assise, demi * (1 + CASQUE_DEBORD), demi * CASQUE_EPAISSEUR)),
+      pts: pose(
+        ellipse(
+          cx,
+          assise,
+          demi * (1 + CASQUE_DEBORD * k('visiere')),
+          demi * CASQUE_EPAISSEUR * k('epaisseur')
+        )
+      ),
       role: 'sombre'
     }
   ]
@@ -356,17 +484,37 @@ const GILET_ROULIS = 0.4
 const GILET_MONTEE = 0.06
 const GILET_DESCENTE = 0.16
 
+/**
+ * Curseurs du gilet. Moins nombreux que ceux du casque, et c'est la forme de
+ * l'objet qui le veut : decoupe par le corps, il n'a ni taille propre ni contour
+ * a elargir — ce qui se regle, c'est la ou il tombe et ce qu'on y voit.
+ */
+const GILET_KNOBS: AccessoryKnob[] = [
+  { id: 'col', base: 0, min: -0.25, max: 0.35, step: 0.005 },
+  { id: 'bandes', base: 1, min: 0, max: 2.2, step: 0.01 },
+  { id: 'x', base: 0, min: -0.4, max: 0.4, step: 0.005 },
+  { id: 'y', base: 0, min: -0.3, max: 0.5, step: 0.005 },
+  { id: 'angle', base: 0, min: -45, max: 45, step: 1 }
+]
+
 /** Un pan et ses bandes ; `cote` vaut -1 a gauche, +1 a droite. */
-function pan(cote: number, bas: number): AccessoryPart[] {
+function pan(cote: number, bas: number, col: number, bandes: number): AccessoryPart[] {
   const x = (v: number) => cote * v
+  /** Demi-largeur d'une bande, retouchee autour de son milieu. */
+  const bande = (a: number, b: number): [number, number] => {
+    const milieu = (a + b) / 2
+    const demi = ((b - a) / 2) * bandes
+    return [milieu - demi, milieu + demi]
+  }
+  const bretelle = bande(GILET_BRETELLE[0], GILET_BRETELLE[1])
   const ceintureHaut = GILET_CEINTURE[0] * bas
   const ceintureBas = GILET_CEINTURE[1] * bas
   return [
     {
       pts: [
-        { x: x(GILET_DEHORS), y: GILET_EPAULE },
-        { x: x(GILET_COL_X), y: GILET_COL },
-        { x: x(GILET_OUVERTURE), y: GILET_V },
+        { x: x(GILET_DEHORS), y: GILET_EPAULE + col },
+        { x: x(GILET_COL_X), y: GILET_COL + col },
+        { x: x(GILET_OUVERTURE), y: GILET_V + col },
         { x: x(GILET_OUVERTURE), y: GILET_BAS },
         { x: x(GILET_DEHORS), y: GILET_BAS }
       ],
@@ -374,25 +522,36 @@ function pan(cote: number, bas: number): AccessoryPart[] {
       clipped: true
     },
     {
-      pts: rect(x(GILET_BRETELLE[0]), GILET_BRETELLE_Y, x(GILET_BRETELLE[1]), ceintureBas),
+      pts: rect(x(bretelle[0]), GILET_BRETELLE_Y + col, x(bretelle[1]), ceintureBas),
       role: 'bande',
       clipped: true
     },
     {
-      pts: rect(x(GILET_OUVERTURE), ceintureHaut, x(GILET_DEHORS), ceintureBas),
+      pts: rect(
+        x(GILET_OUVERTURE),
+        ceintureHaut - (ceintureBas - ceintureHaut) * (bandes - 1) * 0.5,
+        x(GILET_DEHORS),
+        ceintureBas + (ceintureBas - ceintureHaut) * (bandes - 1) * 0.5
+      ),
       role: 'bande',
       clipped: true
     }
   ]
 }
 
-function gilet(body: BodyMetrics, head: HeadTilt): AccessoryPart[] {
-  const dx = clamp(head.x * GILET_SUIVI, -GILET_DESCENTE, GILET_DESCENTE)
-  const dy = clamp(head.y * GILET_SUIVI, -GILET_MONTEE, GILET_DESCENTE)
-  return [...pan(-1, body.bottom), ...pan(1, body.bottom)].map((part) => ({
-    ...part,
-    pts: pivot(bouge(part.pts, dx, dy), 0, 0, head.roll * GILET_ROULIS)
-  }))
+function gilet(body: BodyMetrics, head: HeadTilt, tweaks?: AccessoryTweaks): AccessoryPart[] {
+  const k = reglages(GILET_KNOBS, tweaks)
+  const col = k('col')
+  const bandes = k('bandes')
+  const dx = clamp(head.x * GILET_SUIVI, -GILET_DESCENTE, GILET_DESCENTE) + k('x')
+  const dy = clamp(head.y * GILET_SUIVI, -GILET_MONTEE, GILET_DESCENTE) + k('y')
+  const angle = head.roll * GILET_ROULIS + k('angle')
+  return [...pan(-1, body.bottom, col, bandes), ...pan(1, body.bottom, col, bandes)].map(
+    (part) => ({
+      ...part,
+      pts: pivot(bouge(part.pts, dx, dy), 0, 0, angle)
+    })
+  )
 }
 
 /* ------------------------------------------------------------- catalogue */
@@ -404,14 +563,51 @@ export const ACCESSORIES: BotAccessory[] = [
   // calotte la plus large, donc la plus haute (1.30 avec la derive du regard).
   // Tete franchement penchee, il monte a 1.46 — hors cadre fixe, mais dans le
   // viewBox de l'ecran, et c'est celui-la qui sert des que le bot bouge.
-  { id: 'casque', slot: 'tete', reach: 1.32, livery: '#f2b21a', fluo: '#e8ff1f', parts: casque },
+  {
+    id: 'casque',
+    slot: 'tete',
+    livery: '#f2b21a',
+    fluo: '#e8ff1f',
+    knobs: CASQUE_KNOBS,
+    parts: casque
+  },
   // Rien ne depasse : tout est decoupe par le corps.
-  { id: 'gilet', slot: 'torse', reach: 0, livery: '#f4661d', fluo: '#ff6a12', parts: gilet }
+  { id: 'gilet', slot: 'torse', livery: '#f4661d', fluo: '#ff6a12', knobs: GILET_KNOBS, parts: gilet }
 ]
 
 // Map indexee par `string` : les appelants interrogent avec une valeur relue du
 // localStorage ou d'une prop, donc non validee.
 export const ACCESSORY_BY_ID = new Map<string, BotAccessory>(ACCESSORIES.map((a) => [a.id, a]))
+
+/**
+ * Encombrement d'un objet, en unites de rayon de boule : la distance maximale
+ * au centre atteinte par ce qui n'est PAS decoupe par le corps.
+ *
+ * MESURE sur le dessin et non declaree dans le catalogue, et c'est ce qui la
+ * rend juste : la taille du casque se regle a la main, donc aucune constante
+ * ecrite d'avance ne peut la borner. Le cadre d'export s'y ajuste (`demiCadre`,
+ * `src/ui/export.ts`) — sans elle, un casque agrandi se ferait rogner en
+ * silence sur l'image livree.
+ *
+ * Prise DANS LA POSE DE REPOS, parce que c'est ce qu'un export fixe contient :
+ * il rend `idle`, ou seule la derive du regard bouge encore (0.06 rayon, que la
+ * marge du cadre absorbe). Une tete franchement penchee ne se voit qu'a l'ecran
+ * ou dans l'export d'un CYCLE, et ces deux-la tournent sur le viewBox large.
+ */
+export function accessoryReach(
+  acc: BotAccessory,
+  radii: number[],
+  tweaks?: AccessoryTweaks,
+  head: HeadTilt = REST_TILT
+): number {
+  const body = bodyMetrics(toPoints({ radii, rot: 0, cx: 0, cy: 0, sx: 1, sy: 1 }, 1))
+  let max = 0
+  for (const part of acc.parts(body, head, tweaks)) {
+    if (part.clipped) continue
+    for (const p of part.pts) max = Math.max(max, Math.hypot(p.x, p.y))
+  }
+  return max
+}
 
 /**
  * Nettoie une liste d'ids : inconnus retires, doublons ecartes, un seul objet

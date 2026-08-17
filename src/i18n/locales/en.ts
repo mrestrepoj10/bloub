@@ -31,6 +31,8 @@ const en: typeof fr = {
     finish: 'Finish',
     accent: 'Accent colour',
     custom: 'Custom colour',
+    tweaks: 'Tweaks — {objet}',
+    reset: 'Reset',
     color: 'Colour'
   },
 
@@ -149,6 +151,20 @@ const en: typeof fr = {
   accessories: {
     casque: 'Hard hat',
     gilet: 'Hi-vis vest'
+  },
+
+  knobs: {
+    taille: 'Size',
+    largeur: 'Width',
+    hauteur: 'Height',
+    visiere: 'Brim',
+    epaisseur: 'Edge',
+    nervure: 'Ridge',
+    col: 'Collar',
+    bandes: 'Stripes',
+    x: 'Horizontal',
+    y: 'Vertical',
+    angle: 'Tilt'
   },
 
   finishes: {

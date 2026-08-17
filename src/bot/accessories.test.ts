@@ -3,10 +3,16 @@ import {
   ACCESSORIES,
   ACCESSORY_BY_ID,
   NO_TILT,
+  accessoryReach,
+  isTweaked,
+  knobValue,
   normalizeAccessories,
+  normalizeTweaks,
   toggleAccessory,
+  type AccessoryTweaks,
   type BotAccessory,
-  type HeadTilt
+  type HeadTilt,
+  type KnobId
 } from './accessories'
 import { EYE_H, EYE_SPLIT, REST_GAZE, eyePoses, headLean } from './face'
 import { bodyMetrics, radiusAtAngle, toPoints, type Point } from './shape'
@@ -31,9 +37,11 @@ const points = (
   acc: BotAccessory,
   radii: number[],
   libres = false,
-  head: HeadTilt = REPOS_TILT
+  head: HeadTilt = REPOS_TILT,
+  tweaks?: AccessoryTweaks
 ): Point[] =>
-  pieces(acc, radii, head)
+  acc
+    .parts(corps(radii), head, tweaks)
     .filter((p) => !libres || !p.clipped)
     .flatMap((p) => p.pts)
 
@@ -122,14 +130,19 @@ describe('geometrie sur toutes les formes', () => {
    * silence sur l'image exportee.
    */
   for (const acc of ACCESSORIES) {
-    it(`"${acc.id}" tient dans la portee qu il declare, au repos`, () => {
-      // `reach` cadre l'export FIXE, qui rend la pose de repos : la derive du
-      // regard est donc la seule chose qui bouge encore dessous.
+    it(`"${acc.id}" a un encombrement mesurable, cadre par cadre`, () => {
+      /*
+       * `accessoryReach` cadre l'export FIXE : il est MESURE sur le dessin et
+       * non declare, parce que la taille se regle a la main. Il doit donc
+       * majorer ce qui est reellement trace, derive du regard comprise — elle
+       * est la seule chose qui bouge encore sous un export fixe.
+       */
       for (const forme of SHAPES) {
+        const portee = accessoryReach(acc, forme.radii)
         for (const head of REPOS) {
           for (const p of points(acc, forme.radii, true, head)) {
             const r = Math.hypot(p.x, p.y)
-            expect(r, `${acc.id} depasse sur « ${forme.id} »`).toBeLessThanOrEqual(acc.reach)
+            expect(r, `${acc.id} depasse sur « ${forme.id} »`).toBeLessThanOrEqual(portee + 0.02)
           }
         }
       }
@@ -347,12 +360,117 @@ describe('suivi de la tete', () => {
   })
 })
 
+describe('reglages fins', () => {
+  const casque = ACCESSORY_BY_ID.get('casque')!
+  const cercle = SHAPES.find((s) => s.id === 'cercle')!.radii
+  const knob = (id: KnobId) => casque.knobs.find((k) => k.id === id)!
+  /*
+   * Mesure tete DROITE : au repos le casque est incline de -14deg, donc une
+   * piece elargie grandit un peu la boite dans les deux sens et l'on ne peut
+   * plus dire quelle dimension a bouge. Le suivi, lui, a ses propres tests.
+   */
+  const DROIT: HeadTilt = { x: 0, y: 0, lean: 0, roll: 0 }
+  const boite = (tweaks?: AccessoryTweaks) => {
+    const pts = points(casque, cercle, false, DROIT, tweaks)
+    const xs = pts.map((p) => p.x)
+    const ys = pts.map((p) => p.y)
+    return {
+      largeur: Math.max(...xs) - Math.min(...xs),
+      hauteur: Math.max(...ys) - Math.min(...ys),
+      cx: (Math.max(...xs) + Math.min(...xs)) / 2,
+      cy: (Math.max(...ys) + Math.min(...ys)) / 2
+    }
+  }
+
+  it('rend le dessin calibre quand rien n est regle', () => {
+    // Un curseur laisse au repos ne doit rien changer : c'est ce qui fait que
+    // « remettre a zero » n'a aucun calcul a refaire.
+    for (const acc of ACCESSORIES) {
+      const repos: AccessoryTweaks = {}
+      for (const k of acc.knobs) repos[k.id] = k.base
+      expect(acc.parts(corps(cercle), REPOS_TILT, repos)).toEqual(
+        acc.parts(corps(cercle), REPOS_TILT)
+      )
+    }
+  })
+
+  it('lit une valeur reglee, borne ce qui deborde, ignore le reste', () => {
+    const taille = knob('taille')
+    expect(knobValue(taille, { taille: 1.2 })).toBe(1.2)
+    expect(knobValue(taille, { taille: 99 })).toBe(taille.max)
+    expect(knobValue(taille, { taille: -99 })).toBe(taille.min)
+    // Le stockage n'est pas sur : une valeur non finie rendrait tout le contour
+    // `NaN`, donc invisible, sans rien pour le dire.
+    expect(knobValue(taille, { taille: NaN })).toBe(taille.base)
+    expect(knobValue(taille, {})).toBe(taille.base)
+    expect(knobValue(taille)).toBe(taille.base)
+  })
+
+  it('agrandit et rapetisse l objet entier', () => {
+    const grand = boite({ taille: 1.4 })
+    const nu = boite()
+    const petit = boite({ taille: 0.7 })
+    expect(grand.largeur).toBeGreaterThan(nu.largeur)
+    expect(grand.hauteur).toBeGreaterThan(nu.hauteur)
+    expect(petit.largeur).toBeLessThan(nu.largeur)
+    expect(petit.hauteur).toBeLessThan(nu.hauteur)
+  })
+
+  it('regle chaque dimension separement', () => {
+    const nu = boite()
+    // la largeur ne touche pas a la hauteur de la calotte...
+    const large = boite({ largeur: 1.3 })
+    expect(large.largeur).toBeGreaterThan(nu.largeur)
+    // ... mais la hauteur, elle, ne touche pas a la largeur
+    const haut = boite({ hauteur: 1.6 })
+    expect(haut.hauteur).toBeGreaterThan(nu.hauteur)
+    expect(haut.largeur).toBeCloseTo(nu.largeur, 6)
+    // la visiere elargit sans grandir la calotte
+    const visiere = boite({ visiere: 2 })
+    expect(visiere.largeur).toBeGreaterThan(nu.largeur)
+    expect(visiere.hauteur).toBeCloseTo(nu.hauteur, 6)
+  })
+
+  it('deplace et incline l objet', () => {
+    const nu = boite()
+    expect(boite({ x: 0.2 }).cx).toBeCloseTo(nu.cx + 0.2, 6)
+    expect(boite({ y: -0.2 }).cy).toBeCloseTo(nu.cy - 0.2, 6)
+    // l'inclinaison, elle, tourne sur place : le dessin change sans que la
+    // boite ne se deplace franchement
+    const penche = points(casque, cercle, false, DROIT, { angle: 30 })
+    expect(penche).not.toEqual(points(casque, cercle, false, DROIT))
+  })
+
+  it('nettoie des reglages relus', () => {
+    // Objet inconnu, curseur inconnu, valeur hors bornes, valeur illisible.
+    expect(
+      normalizeTweaks({
+        casque: { taille: 1.2, bidule: 3, y: 99 },
+        chapeau: { taille: 2 },
+        gilet: { col: 'haut' }
+      })
+    ).toEqual({ casque: { taille: 1.2, y: knob('y').max } })
+    // Une valeur egale au repos ne merite pas d'etre gardee.
+    expect(normalizeTweaks({ casque: { taille: 1 } })).toEqual({})
+    for (const brut of [null, undefined, 42, 'casque', []]) {
+      expect(normalizeTweaks(brut)).toEqual({})
+    }
+  })
+
+  it('sait si un objet a ete retouche', () => {
+    expect(isTweaked(undefined)).toBe(false)
+    expect(isTweaked({})).toBe(false)
+    expect(isTweaked({ taille: 1.2 })).toBe(true)
+  })
+})
+
 describe('gilet', () => {
   const gilet = ACCESSORY_BY_ID.get('gilet')!
 
   it('est entierement decoupe par le corps, donc ne deborde de rien', () => {
     for (const part of pieces(gilet, SHAPES[0]!.radii)) expect(part.clipped).toBe(true)
-    expect(gilet.reach).toBe(0)
+    // rien a cadrer autour de lui : le corps le taille de toute facon
+    expect(accessoryReach(gilet, SHAPES[0]!.radii)).toBe(0)
   })
 
   it('deborde volontairement du contour : c est le masque qui lui donne sa forme', () => {

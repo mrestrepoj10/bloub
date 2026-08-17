@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { TweakMap } from '@/bot/accessories'
 import BloubBot from '@/components/BloubBot.vue'
 import { DEFAULT_EXPRESSION } from '@/bot/expressions'
 import { DEFAULT_ACCENT, DEFAULT_FINISH } from '@/bot/finishes'
@@ -26,6 +27,7 @@ withDefaults(
     accessories?: string[]
     finish?: string
     accent?: string
+    tweaks?: TweakMap
     size?: number
   }>(),
   {
@@ -36,6 +38,7 @@ withDefaults(
     accessories: () => [],
     finish: DEFAULT_FINISH,
     accent: DEFAULT_ACCENT,
+    tweaks: () => ({}),
     size: 60
   }
 )
@@ -58,6 +61,7 @@ withDefaults(
       :accessories="accessories"
       :finish="finish"
       :accent="accent"
+      :tweaks="tweaks"
       :frozen-at="frozenAt"
     />
     <!-- 12 px : en dessous, une legende n'est plus lisible pour tout le monde -->

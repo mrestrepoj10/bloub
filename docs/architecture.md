@@ -129,10 +129,35 @@ brim, which read as a hat sunk into the head with two black ears. And its brim i
 sized off the *dome*, not the skull, or a pointy shape got a tiny cap under a wide
 sombrero rim.
 
-One consequence for exports: `reach` is declared **for the rest pose**, since that
-is all a still export can contain. A properly tilted head takes the hat out to 1.41
-radii, past the tight frame — but that only ever shows on screen or in a cycle
-export, and both run on the wide ±158 viewBox. Two tests, one per bound.
+## Fine tweaks, and the frame that has to follow them
+
+Each accessory declares its own **knobs** (`AccessoryKnob`): the hat's overall
+size, the geometry of each of its pieces, its position and its tilt; the vest's
+collar, stripes, position and tilt. A knob is always an *offset* from the measured
+drawing — 1 for a factor, 0 for a shift — so a slider left alone renders exactly
+the calibrated object and "reset" has nothing to recompute. Values equal to the
+base are dropped rather than stored, which is also how the reset button knows
+whether it has anything to do. The engine takes them as **configuration**, applied
+at once and outside the cross-fade: a slider you drag has to answer on the frame,
+not trail a quarter second behind your finger.
+
+That breaks a static bound, so `reach` is gone: an accessory's footprint is
+**measured on its own drawing** (`accessoryReach`) at the rest pose, exactly the
+way `RAYON_MAX` is computed from the shapes rather than written down. No constant
+written in advance can bound a size the user sets by hand.
+
+The export frame follows from that measurement, and so does the **screen's**
+viewBox. 158 is enough for everything the bot does by itself — it's the margin
+that houses the rings — but a hat pushed to 1.5× would be sliced by it, on screen
+and in a cycle export alike. `demiEcran` opens the frame just enough, which
+shrinks the ball by the same amount: the price, and it's visible, so it reads.
+It never closes back below 158, because how big the bot looks must not depend on
+what it happens to be wearing when that fits anyway. A test locks the ordering
+that matters — the screen frame always contains the tight one.
+
+A still export, for its part, only ever contains the rest pose (`idle`, where only
+the gaze drift still moves). A properly tilted head takes the hat further, but
+that only shows on screen or in a cycle export, both on the wide frame.
 
 Their colours are **chosen**, not measured, like `--ink`: a site vest is hi-vis
 orange because that is what makes it readable as one, whatever colour the bot is.

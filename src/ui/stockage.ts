@@ -20,6 +20,7 @@ const NOMS = [
   'accessoires',
   'finition',
   'accent',
+  'ajustements',
   'langue'
 ] as const
 
