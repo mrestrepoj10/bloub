@@ -1,7 +1,7 @@
-import type { AccessoryId, AccessoryRole, BotAccessory } from './accessories'
+import type { AccessoryId, AccessoryRole, BotAccessory, HeadTilt } from './accessories'
 import { arcRender, type ArcRender, type DotRender } from './decor'
 import { blendExpression, type BotExpression } from './expressions'
-import { blinkScale, eyePoses, liveliness } from './face'
+import { REST_GAZE, blinkScale, eyePoses, headTop, liveliness } from './face'
 import { clamp, easings, lerp, r2 } from './math'
 import {
   blend,
@@ -94,6 +94,17 @@ export interface Look {
 }
 
 const NO_LOOK: Look = { yaw: 0, pitch: 0, mix: 0, spin: 0, wander: 1 }
+
+/**
+ * Sommet du crane DANS LA POSE DE REPOS : la reference a laquelle se mesure le
+ * mouvement de ce qui est porte sur la tete.
+ *
+ * L'ecart est pris a cette pose et non a une tete droite, parce que c'est sur
+ * elle que le placement des objets a ete cale : au repos l'ecart est nul, donc
+ * le casque se pose exactement ou il a ete regle, et il ne bouge que quand le
+ * regard bouge vraiment.
+ */
+const REPOS_TOP = headTop(REST_GAZE)
 
 const lerpLook = (a: Look, b: Look, t: number): Look => ({
   yaw: lerp(a.yaw, b.yaw, t),
@@ -424,10 +435,19 @@ export class BotEngine {
     const accessories: RenderedAccessory[] = []
     if (worn > 0.01) {
       const metrics = bodyMetrics(toPoints(sil, 1, this.accPts))
+      // Ou en est la tete : c'est `gaze`, donc le regard de la pose, du suivi du
+      // curseur et de la derive au repos reunis. Les objets suivent le meme
+      // mouvement que les yeux, en amorti.
+      const pole = headTop(gaze)
+      const head: HeadTilt = {
+        x: pole.x - REPOS_TOP.x,
+        y: pole.y - REPOS_TOP.y,
+        roll: gaze.roll - REST_GAZE.roll
+      }
       for (const { acc, alpha } of this.accAtTime(now)) {
         const opacity = worn * alpha
         if (opacity <= 0.01) continue
-        for (const part of acc.parts(metrics)) {
+        for (const part of acc.parts(metrics, head)) {
           accessories.push({
             d: polyPath(part.pts, R),
             accessory: acc.id,

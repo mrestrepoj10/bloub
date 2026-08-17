@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest'
 import {
   ACCESSORIES,
   ACCESSORY_BY_ID,
+  NO_TILT,
   normalizeAccessories,
   toggleAccessory,
-  type BotAccessory
+  type BotAccessory,
+  type HeadTilt
 } from './accessories'
 import { EYE_H, EYE_SPLIT, REST_GAZE, eyePoses } from './face'
 import { bodyMetrics, radiusAtAngle, toPoints, type Point } from './shape'
@@ -15,12 +17,41 @@ function corps(radii: number[]) {
   return bodyMetrics(toPoints({ radii, rot: 0, cx: 0, cy: 0, sx: 1, sy: 1 }, 1))
 }
 
-const pieces = (acc: BotAccessory, radii: number[]) => acc.parts(corps(radii))
+const pieces = (acc: BotAccessory, radii: number[], head: HeadTilt = NO_TILT) =>
+  acc.parts(corps(radii), head)
 
-const points = (acc: BotAccessory, radii: number[], libres = false): Point[] =>
-  pieces(acc, radii)
+const points = (acc: BotAccessory, radii: number[], libres = false, head?: HeadTilt): Point[] =>
+  pieces(acc, radii, head)
     .filter((p) => !libres || !p.clipped)
     .flatMap((p) => p.pts)
+
+/**
+ * Balayage de poses de tete, plus large que ce que le bot produit vraiment :
+ * releve sur tous les etats, toutes les expressions et les quatre coins du
+ * suivi de curseur, l'ecart ne depasse pas 0.62 en x comme en y, ni 25deg de
+ * roulis.
+ */
+const POSES: HeadTilt[] = [NO_TILT]
+for (const x of [-0.7, 0, 0.7]) {
+  for (const y of [-0.7, 0, 0.7]) {
+    for (const roll of [-30, 0, 30]) POSES.push({ x, y, roll })
+  }
+}
+
+/**
+ * Ce que la derive du regard au repos deplace : mesuree a 0.06 rayon et 1,8deg.
+ * C'est la seule pose qu'un export FIXE peut contenir, donc la seule que
+ * `reach` ait a couvrir.
+ */
+const REPOS: HeadTilt[] = [NO_TILT]
+for (const x of [-0.07, 0.07]) {
+  for (const y of [-0.05, 0.05]) {
+    for (const roll of [-2, 2]) REPOS.push({ x, y, roll })
+  }
+}
+
+/** Demi-cote du viewBox de l'ecran, en rayons de boule (cf. le `VB` de BloubBot). */
+const ECRAN = 1.58
 
 /**
  * Etendue verticale des yeux AU REPOS pour une forme donnee, en unites de rayon
@@ -77,11 +108,28 @@ describe('geometrie sur toutes les formes', () => {
    * silence sur l'image exportee.
    */
   for (const acc of ACCESSORIES) {
-    it(`"${acc.id}" tient dans la portee qu il declare`, () => {
+    it(`"${acc.id}" tient dans la portee qu il declare, au repos`, () => {
+      // `reach` cadre l'export FIXE, qui rend la pose de repos : la derive du
+      // regard est donc la seule chose qui bouge encore dessous.
       for (const forme of SHAPES) {
-        for (const p of points(acc, forme.radii, true)) {
-          const r = Math.hypot(p.x, p.y)
-          expect(r, `${acc.id} depasse sur « ${forme.id} »`).toBeLessThanOrEqual(acc.reach)
+        for (const head of REPOS) {
+          for (const p of points(acc, forme.radii, true, head)) {
+            const r = Math.hypot(p.x, p.y)
+            expect(r, `${acc.id} depasse sur « ${forme.id} »`).toBeLessThanOrEqual(acc.reach)
+          }
+        }
+      }
+    })
+
+    it(`"${acc.id}" reste dans le viewBox de l ecran, tete penchee`, () => {
+      // L'autre borne : une tete franchement tournee sort du cadre fixe, mais
+      // ce mouvement-la ne se voit qu'a l'ecran et dans l'export d'un CYCLE,
+      // qui tournent tous deux sur le viewBox large.
+      for (const forme of SHAPES) {
+        for (const head of POSES) {
+          for (const p of points(acc, forme.radii, true, head)) {
+            expect(Math.hypot(p.x, p.y), `${acc.id} sur « ${forme.id} »`).toBeLessThan(ECRAN)
+          }
         }
       }
     })
@@ -114,6 +162,23 @@ describe('casque', () => {
     }
   })
 
+  it('reste sur le haut de la tete dans toutes les poses', () => {
+    /*
+     * Il ne depasse plus forcement du sommet une fois la tete penchee : sur une
+     * forme pointue, un casque qui glisse vers l'avant passe sous la pointe, et
+     * c'est ce qu'on veut voir. Ce qui doit tenir, c'est qu'il reste un
+     * COUVRE-CHEF — dans la moitie haute, jamais en travers du visage.
+     */
+    for (const forme of SHAPES) {
+      const body = corps(forme.radii)
+      for (const head of POSES) {
+        const ys = points(casque, forme.radii, false, head).map((p) => p.y)
+        expect(Math.min(...ys), `« ${forme.id} »`).toBeLessThan(body.top * 0.5)
+        expect(Math.max(...ys), `« ${forme.id} »`).toBeLessThan(0)
+      }
+    }
+  })
+
   it('garde une largeur lisible meme sur une forme pointue', () => {
     // Sur le triangle ou la goutte, la corde du crane est presque nulle : sans
     // plancher, le casque se reduirait a un trait.
@@ -134,6 +199,86 @@ describe('casque', () => {
     expect(bas).toBeLessThanOrEqual(oeilHaut)
     // ... et pas perche a dix lieues au-dessus non plus
     expect(oeilHaut - bas).toBeLessThan(0.1)
+  })
+})
+
+describe('suivi de la tete', () => {
+  const casque = ACCESSORY_BY_ID.get('casque')!
+  const gilet = ACCESSORY_BY_ID.get('gilet')!
+  const cercle = SHAPES.find((s) => s.id === 'cercle')!.radii
+  /** Hauteur moyenne d'un objet : ce qui dit s'il monte ou s'il descend. */
+  const hauteur = (acc: BotAccessory, head: HeadTilt) => {
+    const pts = points(acc, cercle, false, head)
+    return pts.reduce((somme, p) => somme + p.y, 0) / pts.length
+  }
+  const cote = (acc: BotAccessory, head: HeadTilt) => {
+    const pts = points(acc, cercle, false, head)
+    return pts.reduce((somme, p) => somme + p.x, 0) / pts.length
+  }
+
+  /*
+   * Le calage du casque et du gilet est fait SUR LA POSE DE REPOS. L'ecart y
+   * etant nul par construction, rien ne doit bouger tant que le regard ne bouge
+   * pas — sinon tout le reglage relatif aux yeux serait a refaire.
+   */
+  it('ne deplace rien tant que la tete est dans sa pose de repos', () => {
+    for (const acc of ACCESSORIES) {
+      expect(pieces(acc, cercle, { x: 0, y: 0, roll: 0 })).toEqual(pieces(acc, cercle))
+    }
+  })
+
+  it('fait monter le casque quand la tete se leve, descendre quand elle baisse', () => {
+    const haut = hauteur(casque, { x: 0, y: -0.4, roll: 0 })
+    const repos = hauteur(casque, NO_TILT)
+    const bas = hauteur(casque, { x: 0, y: 0.4, roll: 0 })
+    expect(haut).toBeLessThan(repos)
+    expect(repos).toBeLessThan(bas)
+  })
+
+  it('le fait glisser du cote ou la tete se tourne', () => {
+    expect(cote(casque, { x: 0.4, y: 0, roll: 0 })).toBeGreaterThan(cote(casque, NO_TILT))
+    expect(cote(casque, { x: -0.4, y: 0, roll: 0 })).toBeLessThan(cote(casque, NO_TILT))
+  })
+
+  /*
+   * Le gilet est peint sur la MEME boule que le casque : une boule qui tourne
+   * fait descendre son bas pendant que son sommet monte. Les deux objets vont
+   * donc en sens inverse, et c'est ce qui se lit comme une rotation plutot que
+   * comme deux dessins qui glissent ensemble.
+   */
+  it('fait aller le gilet dans l autre sens', () => {
+    expect(hauteur(gilet, { x: 0, y: -0.4, roll: 0 })).toBeGreaterThan(hauteur(gilet, NO_TILT))
+    expect(cote(gilet, { x: 0.4, y: 0, roll: 0 })).toBeLessThan(cote(gilet, NO_TILT))
+  })
+
+  it('penche les deux objets avec le roulis, en miroir', () => {
+    for (const acc of ACCESSORIES) {
+      const droite = points(acc, cercle, false, { x: 0, y: 0, roll: 20 })
+      const gauche = points(acc, cercle, false, { x: 0, y: 0, roll: -20 })
+      const repos = points(acc, cercle, false, NO_TILT)
+      // le roulis change vraiment le dessin...
+      expect(droite).not.toEqual(repos)
+      // ... et deux roulis opposes se repondent : meme ecart, sens inverse
+      const ecart = (a: Point[]) =>
+        a.reduce((somme, p, i) => somme + (p.x - repos[i]!.x), 0) / a.length
+      expect(ecart(droite)).toBeCloseTo(-ecart(gauche), 2)
+    }
+  })
+
+  it('reste amorti : la tete se tourne plus que ce qu elle porte', () => {
+    // Un objet qui suivrait au pied de la lettre quitterait le crane : le pole
+    // de la tete se deplace de 0.9 rayon entre deux poses extremes.
+    for (const acc of ACCESSORIES) {
+      for (const axe of ['x', 'y'] as const) {
+        const tete = 0.4
+        const bouge = Math.abs(
+          (axe === 'x' ? cote : hauteur)(acc, { ...NO_TILT, [axe]: tete }) -
+            (axe === 'x' ? cote : hauteur)(acc, NO_TILT)
+        )
+        expect(bouge, `${acc.id}/${axe}`).toBeGreaterThan(0.02)
+        expect(bouge, `${acc.id}/${axe}`).toBeLessThan(tete)
+      }
+    }
   })
 })
 

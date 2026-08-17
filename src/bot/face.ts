@@ -60,11 +60,10 @@ function spin(u: Vec3, v: Vec3, angle: number): [Vec3, Vec3] {
 }
 
 /**
- * Repere de la tete puis des deux yeux.
+ * Repere de la tete : avant, droite, bas.
  * Repere ecran : x a droite, y vers le bas, z vers le spectateur.
- * L'indice 0 est l'oeil interieur, l'indice 1 l'oeil exterieur.
  */
-export function eyePoses(gaze: HeadGaze, scale: number, split = EYE_SPLIT): [EyePose, EyePose] {
+function headBasis(gaze: HeadGaze): { f: Vec3; right: Vec3; down: Vec3 } {
   let f: Vec3 = [0, 0, 1]
   let right: Vec3 = [1, 0, 0]
   let down: Vec3 = [0, 1, 0]
@@ -75,6 +74,48 @@ export function eyePoses(gaze: HeadGaze, scale: number, split = EYE_SPLIT): [Eye
   ;[down, f] = spin(down, f, deg(gaze.pitch))
   // roulis : la tete penche dans son propre plan
   ;[right, down] = spin(right, down, deg(gaze.roll))
+
+  return { f, right, down }
+}
+
+/**
+ * Angle entre le sommet du crane et le regard, en degres : ou se pose une
+ * coiffe. Au-dessus du visage, pas au pole.
+ */
+const COIFFE = 50
+
+/**
+ * Point de la tete ou se pose ce qu'on porte dessus, projete a l'ecran (x, y)
+ * avec sa profondeur (z).
+ *
+ * PAS le pole geometrique, et c'est le piege de cette fonction : sur une
+ * sphere, le pole bascule vers l'arriere des que la tete se leve, donc sa
+ * projection REDESCEND a l'ecran. Un casque accroche a lui descendrait quand le
+ * bot leve le regard — exactement l'inverse de ce qu'on lit. Le point est donc
+ * pris a 50deg du pole VERS LE VISAGE, la ou une coiffe se porte vraiment : il
+ * monte avec le regard, glisse du cote ou la tete se tourne, et penche avec
+ * elle.
+ *
+ * `accessories.ts` s'en sert pour que les objets portes ne restent pas plantes
+ * au meme endroit quelle que soit la pose.
+ */
+export function headTop(gaze: HeadGaze): { x: number; y: number; z: number } {
+  const { f, down } = headBasis(gaze)
+  const c = Math.cos(deg(COIFFE))
+  const s = Math.sin(deg(COIFFE))
+  return {
+    x: -down[0]! * c + f[0]! * s,
+    y: -down[1]! * c + f[1]! * s,
+    z: -down[2]! * c + f[2]! * s
+  }
+}
+
+/**
+ * Repere de la tete puis des deux yeux.
+ * L'indice 0 est l'oeil interieur, l'indice 1 l'oeil exterieur.
+ */
+export function eyePoses(gaze: HeadGaze, scale: number, split = EYE_SPLIT): [EyePose, EyePose] {
+  const { f, right, down } = headBasis(gaze)
 
   const build = (side: number): EyePose => {
     const [ef, er] = spin(f, right, deg(split * side))

@@ -67,6 +67,17 @@ Details and the reasoning behind each are in [docs/](docs/):
   chosen shape, worn objects only show on `baseBody` states. Each declares a `reach`,
   and that's what widens the export frame (`demiCadre`) so a hat isn't sliced off the
   top; a test checks the declaration against all eight shapes.
+- **What the bot wears follows its head.** The engine measures the head anchor
+  (`headTop`) and hands accessories the gap to the REST pose, so idle stays exactly
+  where it was calibrated and things move only when the gaze does. `headTop` is not
+  the sphere's pole on purpose: the pole's projection comes back *down* when the head
+  tips back, so a hat pinned to it would sink as the bot looks up. It's taken 50° off
+  the pole toward the face. The follow is damped and clamped per object; the hat's
+  seat is re-measured at its new height (so it stays chaired on the skull) and pivots
+  around that seat, while the vest moves the opposite way — same ball, rotating.
+  `reach` is declared for the REST pose only, because that's all a still export can
+  contain; a tilted head goes past the tight frame but only ever on screen or in a
+  cycle export, both on the wide viewBox.
 - **An accessory declares ROLES, a finish paints them** (`finishes.ts`). Geometry
   carries `corps` / `clair` / `sombre` / `bande`, never a hex, so a new colour scheme
   costs no geometry and a new object costs no colour. The engine emits the role and

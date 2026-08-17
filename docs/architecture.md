@@ -79,6 +79,35 @@ They follow the same rule as the chosen shape — they only appear on `baseBody`
 states, and cross-fade with them — because everywhere else the silhouette *is* the
 animation: a hard hat riding the "!" across the screen means nothing.
 
+## What you wear follows the head
+
+The body is a head, so an object on it can't sit at a fixed height: when the bot
+looks up the hat has to rise, and slide to the side the head turns to. The engine
+measures where the head is pointing (`headTop`, face.ts) and hands accessories the
+gap to the **rest pose** (`HeadTilt`). Measuring against that pose rather than
+against a level head is what keeps the placement calibrated: idle-with-drift is
+exactly where it was tuned, and things only move when the gaze really moves.
+
+`headTop` is deliberately **not** the geometric pole of the sphere, and that is the
+trap this function exists for. On a sphere the pole tips backward as the head
+lifts, so its projection comes back *down* the screen — a hat pinned to it would
+sink exactly when the bot looks up. The anchor is taken 50° off the pole toward the
+face, where a hat is actually worn: it rises with the gaze, slides with the yaw and
+leans with the roll.
+
+The motion is damped and clamped, per object (`*_SUIVI`, `*_ROULIS`), because the
+head turns far more than what sits on it — the anchor travels 0.9 radius between
+extreme poses. The hat's seat is also **re-measured** at its new height, so it
+re-chairs itself on the skull's chord there instead of floating above it, and it
+pivots around that seat: a helmet tips on a head, it doesn't orbit around it. The
+vest moves the *other* way, since it is painted on the same ball and a ball that
+rotates lowers its bottom while its top rises.
+
+One consequence for exports: `reach` is declared **for the rest pose**, since that
+is all a still export can contain. A properly tilted head takes the hat out to 1.41
+radii, past the tight frame — but that only ever shows on screen or in a cycle
+export, and both run on the wide ±158 viewBox. Two tests, one per bound.
+
 Their colours are **chosen**, not measured, like `--ink`: a site vest is hi-vis
 orange because that is what makes it readable as one, whatever colour the bot is.
 

@@ -1,4 +1,4 @@
-import { TAU } from './math'
+import { TAU, clamp } from './math'
 import type { BodyMetrics, Point } from './shape'
 
 /**
@@ -56,23 +56,55 @@ export interface AccessoryPart {
   clipped?: boolean
 }
 
+/**
+ * Ou en est la tete par rapport a sa POSE DE REPOS.
+ *
+ * Un objet porte n'est pas plante a une hauteur fixe : le corps est une tete,
+ * et quand elle se leve ou se tourne, ce qu'elle porte suit. Le moteur mesure
+ * donc le deplacement du sommet du crane (`headTop`, face.ts) et le passe ici.
+ *
+ * L'ecart est pris a la pose de repos et non a une tete droite : c'est ce qui
+ * garde intact le calage fait sur cette pose — a l'arret, rien ne bouge — et ne
+ * fait bouger les objets que quand le regard, lui, change vraiment.
+ *
+ * Amorti, pas applique tel quel : le pole de la tete se deplace de 0.9 rayon
+ * entre deux poses extremes, et un casque qui suivrait au pied de la lettre
+ * quitterait le crane. Chaque objet decide de sa part (`*_SUIVI`).
+ */
+export interface HeadTilt {
+  /** deplacement du sommet du crane, en unites de rayon de boule */
+  x: number
+  y: number
+  /** roulis, en degres, ecart a la pose de repos */
+  roll: number
+}
+
+/** Tete droite, au repos : ce que voit un appel qui ne pilote pas la pose. */
+export const NO_TILT: HeadTilt = { x: 0, y: 0, roll: 0 }
+
 export interface BotAccessory {
   id: AccessoryId
   slot: AccessorySlot
   /**
-   * Distance maximale au centre atteinte par les parties NON decoupees, en
-   * unites de rayon de boule. Le cadre d'export s'y ajuste (`demiCadre`,
-   * `src/ui/export.ts`) : sans elle, un casque qui depasse de la boule se
-   * ferait rogner en silence sur l'image exportee. Verifiee sur toutes les
-   * formes du personnalisateur par `accessories.test.ts`.
+   * Distance maximale au centre atteinte par les parties NON decoupees, DANS LA
+   * POSE DE REPOS, en unites de rayon de boule. Le cadre d'export s'y ajuste
+   * (`demiCadre`, `src/ui/export.ts`) : sans elle, un casque qui depasse de la
+   * boule se ferait rogner en silence sur l'image exportee.
+   *
+   * Au repos et pas dans n'importe quelle pose, parce que c'est ce qu'un export
+   * FIXE contient : il rend `idle`, ou seule la derive du regard bouge encore
+   * (0.06 rayon). Une tete franchement penchee ne se voit qu'a l'ecran ou dans
+   * l'export d'un CYCLE, et ces deux-la tournent sur le viewBox large (±158),
+   * qui contient largement le mouvement. Les deux bornes sont verifiees sur les
+   * huit formes par `accessories.test.ts`.
    */
   reach: number
   /** Teinte de reference, celle du vrai materiel. */
   livery: string
   /** La meme, poussee au neon, pour la finition fluo. */
   fluo: string
-  /** Contours de l'objet pour la silhouette mesuree a cet instant. */
-  parts(body: BodyMetrics): AccessoryPart[]
+  /** Contours de l'objet pour la silhouette et la pose de tete a cet instant. */
+  parts(body: BodyMetrics, head: HeadTilt): AccessoryPart[]
 }
 
 /* ------------------------------------------------------------- primitives */
@@ -95,6 +127,23 @@ function dome(cx: number, cy: number, rx: number, ry: number, steps = 28): Point
     return { x: cx + Math.cos(a) * rx, y: cy + Math.sin(a) * ry }
   })
 }
+
+/** Fait tourner des points de `deg` degres autour de (cx, cy). */
+function pivot(pts: Point[], cx: number, cy: number, deg: number): Point[] {
+  if (!deg) return pts
+  const a = (deg * Math.PI) / 180
+  const c = Math.cos(a)
+  const s = Math.sin(a)
+  return pts.map((p) => {
+    const dx = p.x - cx
+    const dy = p.y - cy
+    return { x: cx + dx * c - dy * s, y: cy + dx * s + dy * c }
+  })
+}
+
+/** Translate des points. */
+const bouge = (pts: Point[], dx: number, dy: number): Point[] =>
+  pts.map((p) => ({ x: p.x + dx, y: p.y + dy }))
 
 /** Rectangle, dans l'ordre horaire. */
 function rect(x0: number, y0: number, x1: number, y1: number): Point[] {
@@ -150,26 +199,59 @@ const CASQUE_MINI = 0.34
 const CASQUE_MAXI = 0.62
 /** Largeur de la nervure, en fraction de la calotte. */
 const CASQUE_NERVURE_L = 0.22
+/**
+ * Part du deplacement du crane que le casque suit, et part du roulis dont il
+ * penche. Amorti : la tete se tourne de bien plus que ce qu'un casque bouge sur
+ * elle, et au-dela le couvre-chef se met a glisser comme s'il etait trop grand.
+ *
+ * Ce n'est pas un simple decalage de dessin : l'assise est REMESUREE a sa
+ * nouvelle hauteur, donc le casque se rechausse sur la corde du crane a cet
+ * endroit-la. C'est ce qui le garde pose sur la tete au lieu de flotter
+ * au-dessus des que le regard se leve.
+ */
+const CASQUE_SUIVI = 0.32
+const CASQUE_ROULIS = 0.45
+/**
+ * Bornes de l'assise, en fraction du crane. Elles bornent du meme coup la
+ * portee de l'objet (`reach`), donc le cadre d'export : sans elles, une pose
+ * extreme sortirait le casque du cadre.
+ */
+const CASQUE_HAUT = 0.9
+const CASQUE_BAS = 0.55
+/** Debattement lateral maximal, en unites de rayon de boule. */
+const CASQUE_ECART = 0.18
 
-function casque(body: BodyMetrics): AccessoryPart[] {
+function casque(body: BodyMetrics, head: HeadTilt): AccessoryPart[] {
   // Hauteur du crane : tout le casque s'exprime en fraction de cette mesure,
   // donc il grandit avec la tete au lieu d'etre cale sur le cercle seul.
   const crane = -body.top
-  const assise = body.top * (1 - CASQUE_ASSISE)
+  // Le sommet du crane monte quand le regard se leve : l'assise le suit, bornee
+  // pour ne pas sortir de la tete par le haut ni descendre sur les yeux.
+  const assise = clamp(
+    body.top * (1 - CASQUE_ASSISE) + head.y * CASQUE_SUIVI * crane,
+    body.top * CASQUE_HAUT,
+    body.top * CASQUE_BAS
+  )
   const corde = body.chordAt(assise)
   const demi = Math.min(
     Math.max(corde ? ((corde.x1 - corde.x0) / 2) * CASQUE_LARGEUR : 0, CASQUE_MINI * crane),
     ((body.right - body.left) / 2) * CASQUE_MAXI
   )
-  const cx = corde ? (corde.x0 + corde.x1) / 2 : 0
+  // Et il glisse du cote ou la tete penche. L'ecart est borne : au-dela, le
+  // casque depasserait du crane au lieu d'etre porte de travers.
+  const ecart = clamp(head.x * CASQUE_SUIVI, -CASQUE_ECART, CASQUE_ECART) * crane
+  const cx = (corde ? (corde.x0 + corde.x1) / 2 : 0) + ecart
   const hauteur = demi * CASQUE_COQUE
+  // Il penche AUTOUR DE SON ASSISE et non autour du centre de la boule : un
+  // casque bascule sur la tete, il n'orbite pas autour d'elle.
+  const roule = (pts: Point[]) => pivot(pts, cx, assise, head.roll * CASQUE_ROULIS)
 
   // La calotte, sa nervure eclairee, et la visiere qui reste dans son ombre.
   return [
-    { pts: dome(cx, assise, demi, hauteur), role: 'corps' },
-    { pts: dome(cx, assise, demi * CASQUE_NERVURE_L, hauteur), role: 'clair' },
+    { pts: roule(dome(cx, assise, demi, hauteur)), role: 'corps' },
+    { pts: roule(dome(cx, assise, demi * CASQUE_NERVURE_L, hauteur)), role: 'clair' },
     {
-      pts: ellipse(cx, assise, demi + CASQUE_DEBORD * crane, CASQUE_EPAISSEUR * crane),
+      pts: roule(ellipse(cx, assise, demi + CASQUE_DEBORD * crane, CASQUE_EPAISSEUR * crane)),
       role: 'sombre'
     }
   ]
@@ -217,6 +299,17 @@ const GILET_BRETELLE_Y = -0.05
  * d'orange en dessous, qu'on lit comme un trait parasite.
  */
 const GILET_CEINTURE = [0.62, 0.76] as const
+/**
+ * Le gilet suit lui aussi, mais A L'ENVERS : il est peint sur la meme boule que
+ * le casque, et une boule qui tourne fait descendre son bas pendant que son
+ * sommet monte. Il penche en revanche DANS LE MEME SENS, autour du centre —
+ * c'est le meme decor sur la meme sphere.
+ *
+ * Moins amorti n'aurait pas de sens plus haut : le vetement est decoupe par le
+ * corps, donc il peut glisser franchement sans jamais deborder.
+ */
+const GILET_SUIVI = 0.45
+const GILET_ROULIS = 0.5
 
 /** Un pan et ses bandes ; `cote` vaut -1 a gauche, +1 a droite. */
 function pan(cote: number, bas: number): AccessoryPart[] {
@@ -248,18 +341,25 @@ function pan(cote: number, bas: number): AccessoryPart[] {
   ]
 }
 
-function gilet(body: BodyMetrics): AccessoryPart[] {
-  return [...pan(-1, body.bottom), ...pan(1, body.bottom)]
+function gilet(body: BodyMetrics, head: HeadTilt): AccessoryPart[] {
+  const dx = -head.x * GILET_SUIVI
+  const dy = -head.y * GILET_SUIVI
+  return [...pan(-1, body.bottom), ...pan(1, body.bottom)].map((part) => ({
+    ...part,
+    pts: pivot(bouge(part.pts, dx, dy), 0, 0, head.roll * GILET_ROULIS)
+  }))
 }
 
 /* ------------------------------------------------------------- catalogue */
 
 export const ACCESSORIES: BotAccessory[] = [
-  // 1.30 : le pire cas est le squircle, dont le sommet plat porte la calotte la
-  // plus large, donc la plus haute (1.25). Verifie sur les huit formes par un
-  // test — c'est cette valeur qui elargit le cadre d'export.
-  // jaune de securite, et sa version neon
-  { id: 'casque', slot: 'tete', reach: 1.3, livery: '#f2b21a', fluo: '#e8ff1f', parts: casque },
+  // Jaune de securite, et sa version neon.
+  //
+  // 1.28 au repos : le pire cas est le squircle, dont le sommet plat porte la
+  // calotte la plus large, donc la plus haute (1.26 avec la derive du regard).
+  // Tete franchement penchee, il monte a 1.41 — hors cadre fixe, mais dans le
+  // viewBox de l'ecran, et c'est celui-la qui sert des que le bot bouge.
+  { id: 'casque', slot: 'tete', reach: 1.28, livery: '#f2b21a', fluo: '#e8ff1f', parts: casque },
   // Rien ne depasse : tout est decoupe par le corps.
   { id: 'gilet', slot: 'torse', reach: 0, livery: '#f4661d', fluo: '#ff6a12', parts: gilet }
 ]
