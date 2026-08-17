@@ -169,21 +169,32 @@ function rect(x0: number, y0: number, x1: number, y1: number): Point[] {
  */
 const CASQUE_ASSISE = 0.22
 /**
- * Largeur de la calotte, en fraction de la corde du crane a cette hauteur. Un
- * peu moins que la corde : posee pile dessus, elle donnait un couvercle plat.
+ * Largeur de la calotte, en fraction de la corde du crane a cette hauteur.
+ *
+ * TOUTE la corde, et c'est une correction : a 0.88, la calotte etait plus
+ * etroite que le crane a l'endroit meme ou elle s'y pose, donc le sommet du
+ * corps ressortait de chaque cote au-dessus de la visiere. Un casque enfonce
+ * dans la tete, avec deux oreilles noires qui depassent. Un couvre-chef couvre.
  */
-const CASQUE_LARGEUR = 0.88
+const CASQUE_LARGEUR = 1
 /**
  * Hauteur de la calotte, en fraction de sa DEMI-largeur — donc une proportion
  * de casque et non de crane. Rapportee au crane, une forme pointue portait un
  * chapeau haut de forme pendant qu'une forme aplatie portait un couvercle.
- * 0.85 est ce qui donne la coque quasi hemispherique d'un casque de chantier.
+ * 0.78 donne la coque un peu surbaissee d'un casque de chantier.
  */
-const CASQUE_COQUE = 0.85
-/** Debord lateral de la visiere, en fraction du crane. */
-const CASQUE_DEBORD = 0.13
-/** Demi-epaisseur de la visiere, en fraction du crane. */
-const CASQUE_EPAISSEUR = 0.075
+const CASQUE_COQUE = 0.78
+/**
+ * Visiere : son debord lateral et sa demi-epaisseur, en fraction de la
+ * DEMI-LARGEUR DE LA CALOTTE et non du crane.
+ *
+ * Rapportee au crane, elle gardait sa taille pendant que la calotte retrecissait
+ * sur une forme pointue : le triangle et la goutte portaient un sombrero, large
+ * rebord sous une toute petite coque. Rapportee a la calotte, le casque grandit
+ * et retrecit d'un seul tenant.
+ */
+const CASQUE_DEBORD = 0.21
+const CASQUE_EPAISSEUR = 0.12
 /**
  * Demi-largeur minimale de la calotte, en fraction du crane : sur une forme
  * pointue (le triangle, la goutte) la corde est presque nulle, et le casque se
@@ -196,7 +207,7 @@ const CASQUE_MINI = 0.34
  * tout le corps a la hauteur de l'assise : sans plafond, le casque y devenait
  * une coque geante qui recouvrait la boule entiere.
  */
-const CASQUE_MAXI = 0.62
+const CASQUE_MAXI = 0.72
 /** Largeur de la nervure, en fraction de la calotte. */
 const CASQUE_NERVURE_L = 0.22
 /**
@@ -251,7 +262,7 @@ function casque(body: BodyMetrics, head: HeadTilt): AccessoryPart[] {
     { pts: roule(dome(cx, assise, demi, hauteur)), role: 'corps' },
     { pts: roule(dome(cx, assise, demi * CASQUE_NERVURE_L, hauteur)), role: 'clair' },
     {
-      pts: roule(ellipse(cx, assise, demi + CASQUE_DEBORD * crane, CASQUE_EPAISSEUR * crane)),
+      pts: roule(ellipse(cx, assise, demi * (1 + CASQUE_DEBORD), demi * CASQUE_EPAISSEUR)),
       role: 'sombre'
     }
   ]
@@ -300,16 +311,28 @@ const GILET_BRETELLE_Y = -0.05
  */
 const GILET_CEINTURE = [0.62, 0.76] as const
 /**
- * Le gilet suit lui aussi, mais A L'ENVERS : il est peint sur la meme boule que
- * le casque, et une boule qui tourne fait descendre son bas pendant que son
- * sommet monte. Il penche en revanche DANS LE MEME SENS, autour du centre —
- * c'est le meme decor sur la meme sphere.
+ * Le gilet suit la tete DANS LE MEME SENS qu'elle, et pas a l'envers.
  *
- * Moins amorti n'aurait pas de sens plus haut : le vetement est decoupe par le
- * corps, donc il peut glisser franchement sans jamais deborder.
+ * A l'envers etait pourtant le plus juste : peint sur la meme boule que le
+ * casque, il devrait descendre quand le sommet monte, comme n'importe quel
+ * decor d'une sphere qui tourne. Sauf que les etats qui baissent le regard
+ * (« yeux ecarquilles », le clin d'oeil) le faisaient alors REMONTER jusqu'au
+ * visage, et les yeux se retrouvaient poses au milieu de l'orange. Un vetement
+ * qui monte sur la figure ne se lit plus comme un vetement.
+ *
+ * Il se comporte donc comme un habit pendu au corps plutot que comme un decal :
+ * il accompagne le mouvement au lieu de le contrarier. Le gilet n'a de toute
+ * facon aucun contour propre — le corps le decoupe — donc rien ne trahit
+ * l'entorse a la sphere.
  */
-const GILET_SUIVI = 0.45
-const GILET_ROULIS = 0.5
+const GILET_SUIVI = 0.18
+const GILET_ROULIS = 0.4
+/**
+ * Debattement, en unites de rayon de boule. DISSYMETRIQUE, parce que la gene
+ * l'est : vers le bas il n'y a rien a heurter, vers le haut il y a les yeux.
+ */
+const GILET_MONTEE = 0.06
+const GILET_DESCENTE = 0.16
 
 /** Un pan et ses bandes ; `cote` vaut -1 a gauche, +1 a droite. */
 function pan(cote: number, bas: number): AccessoryPart[] {
@@ -342,8 +365,8 @@ function pan(cote: number, bas: number): AccessoryPart[] {
 }
 
 function gilet(body: BodyMetrics, head: HeadTilt): AccessoryPart[] {
-  const dx = -head.x * GILET_SUIVI
-  const dy = -head.y * GILET_SUIVI
+  const dx = clamp(head.x * GILET_SUIVI, -GILET_DESCENTE, GILET_DESCENTE)
+  const dy = clamp(head.y * GILET_SUIVI, -GILET_MONTEE, GILET_DESCENTE)
   return [...pan(-1, body.bottom), ...pan(1, body.bottom)].map((part) => ({
     ...part,
     pts: pivot(bouge(part.pts, dx, dy), 0, 0, head.roll * GILET_ROULIS)
@@ -355,11 +378,11 @@ function gilet(body: BodyMetrics, head: HeadTilt): AccessoryPart[] {
 export const ACCESSORIES: BotAccessory[] = [
   // Jaune de securite, et sa version neon.
   //
-  // 1.28 au repos : le pire cas est le squircle, dont le sommet plat porte la
-  // calotte la plus large, donc la plus haute (1.26 avec la derive du regard).
-  // Tete franchement penchee, il monte a 1.41 — hors cadre fixe, mais dans le
+  // 1.32 au repos : le pire cas est le squircle, dont le sommet plat porte la
+  // calotte la plus large, donc la plus haute (1.30 avec la derive du regard).
+  // Tete franchement penchee, il monte a 1.46 — hors cadre fixe, mais dans le
   // viewBox de l'ecran, et c'est celui-la qui sert des que le bot bouge.
-  { id: 'casque', slot: 'tete', reach: 1.28, livery: '#f2b21a', fluo: '#e8ff1f', parts: casque },
+  { id: 'casque', slot: 'tete', reach: 1.32, livery: '#f2b21a', fluo: '#e8ff1f', parts: casque },
   // Rien ne depasse : tout est decoupe par le corps.
   { id: 'gilet', slot: 'torse', reach: 0, livery: '#f4661d', fluo: '#ff6a12', parts: gilet }
 ]

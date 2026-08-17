@@ -74,7 +74,10 @@ Details and the reasoning behind each are in [docs/](docs/):
   tips back, so a hat pinned to it would sink as the bot looks up. It's taken 50° off
   the pole toward the face. The follow is damped and clamped per object; the hat's
   seat is re-measured at its new height (so it stays chaired on the skull) and pivots
-  around that seat, while the vest moves the opposite way — same ball, rotating.
+  around that seat. The vest follows the SAME way and less far, which is the one
+  knowing departure from the sphere: built to counter-move (correct for a decal), the
+  states that look down pushed it up over the face, eyes in the middle of the orange.
+  Its clamp is asymmetric because the obstacle is — nothing below, the eyes above.
   `reach` is declared for the REST pose only, because that's all a still export can
   contain; a tilted head goes past the tight frame but only ever on screen or in a
   cycle export, both on the wide viewBox.

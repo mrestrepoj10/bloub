@@ -99,9 +99,23 @@ The motion is damped and clamped, per object (`*_SUIVI`, `*_ROULIS`), because th
 head turns far more than what sits on it — the anchor travels 0.9 radius between
 extreme poses. The hat's seat is also **re-measured** at its new height, so it
 re-chairs itself on the skull's chord there instead of floating above it, and it
-pivots around that seat: a helmet tips on a head, it doesn't orbit around it. The
-vest moves the *other* way, since it is painted on the same ball and a ball that
-rotates lowers its bottom while its top rises.
+pivots around that seat: a helmet tips on a head, it doesn't orbit around it.
+
+The vest follows the head the *same* way, and less far — which is the one place
+this model knowingly departs from the sphere. Painted on the same ball, it ought
+to go down when the crown goes up; it was built that way first, and the states
+that look down (`wide`, `wink`) then pushed it up over the face until the eyes sat
+in the middle of the orange. A garment climbing onto the face stops reading as a
+garment. So it behaves like clothing hanging on the body rather than a decal, with
+an **asymmetric** clamp, because the obstacle is asymmetric: nothing to hit going
+down, the eyes going up. It has no outline of its own — the body clips it — so
+nothing betrays the liberty.
+
+A related fix on the hat itself: its dome is as wide as the skull's chord at the
+seat, not a fraction of it. Narrower, the crown poked out on both sides above the
+brim, which read as a hat sunk into the head with two black ears. And its brim is
+sized off the *dome*, not the skull, or a pointy shape got a tiny cap under a wide
+sombrero rim.
 
 One consequence for exports: `reach` is declared **for the rest pose**, since that
 is all a still export can contain. A properly tilted head takes the hat out to 1.41

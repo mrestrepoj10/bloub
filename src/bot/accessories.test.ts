@@ -246,9 +246,32 @@ describe('suivi de la tete', () => {
    * donc en sens inverse, et c'est ce qui se lit comme une rotation plutot que
    * comme deux dessins qui glissent ensemble.
    */
-  it('fait aller le gilet dans l autre sens', () => {
-    expect(hauteur(gilet, { x: 0, y: -0.4, roll: 0 })).toBeGreaterThan(hauteur(gilet, NO_TILT))
-    expect(cote(gilet, { x: 0.4, y: 0, roll: 0 })).toBeLessThan(cote(gilet, NO_TILT))
+  it('emmene le gilet dans le meme sens, et bien moins loin', () => {
+    // Il accompagne le mouvement au lieu de le contrarier : a l'envers, les
+    // etats qui baissent le regard le faisaient remonter jusqu'aux yeux.
+    expect(hauteur(gilet, { x: 0, y: 0.4, roll: 0 })).toBeGreaterThan(hauteur(gilet, NO_TILT))
+    expect(cote(gilet, { x: 0.4, y: 0, roll: 0 })).toBeGreaterThan(cote(gilet, NO_TILT))
+    // et toujours moins que le casque, qui est pose sur la tete meme
+    const bouge = (acc: BotAccessory) =>
+      Math.abs(hauteur(acc, { x: 0, y: 0.4, roll: 0 }) - hauteur(acc, NO_TILT))
+    expect(bouge(gilet)).toBeLessThan(bouge(casque))
+  })
+
+  it('ne laisse jamais le gilet monter jusqu au visage', () => {
+    /*
+     * La gene est DISSYMETRIQUE, et c'est ce qui justifie le debattement du
+     * meme nom : vers le bas le vetement n'a rien a heurter, vers le haut il y
+     * a les yeux. Meme dans la pose la plus tordue, son col doit rester dans le
+     * bas de la boule.
+     *
+     * Mesure sur ce qui est VISIBLE seulement : le gilet deborde franchement du
+     * contour par construction (c'est le masque qui lui donne sa forme), donc
+     * ses points lointains ne disent rien de ce qu'on voit.
+     */
+    for (const head of POSES) {
+      const dedans = points(gilet, cercle, false, head).filter((p) => Math.hypot(p.x, p.y) <= 1)
+      expect(Math.min(...dedans.map((p) => p.y)), `x=${head.x} y=${head.y}`).toBeGreaterThan(-0.35)
+    }
   })
 
   it('penche les deux objets avec le roulis, en miroir', () => {
